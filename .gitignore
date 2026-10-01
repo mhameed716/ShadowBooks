@@ -1,0 +1,9 @@
+.gradle/
+.idea/
+local.properties
+build/
+*/build/
+*.iml
+# PDFs are fetched by scripts/download_books.sh during APK builds.
+app/src/main/assets/books/*.pdf
+app/src/main/assets/books/*.part
