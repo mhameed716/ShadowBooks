@@ -34,6 +34,15 @@ object LabCatalog {
             accentColor = Color(0xFF38E2B5),
             cardTop = Color(0xFF102A2F),
             cardBottom = Color(0xFF0C1826),
+            experiments = listOf(
+                LabExperiment(
+                    id = "chem_periodic_table",
+                    orderInBook = 1,
+                    title = "الجدول الدوري التفاعلي للعناصر",
+                    unitTitle = "الوحدة الأولى: العناصر الانتقالية (ص 11–15)",
+                    summary = "استعراض جميع العناصر الـ 118 بشكلها الحقيقي ولونها وكتلتها وتوزيعها الإلكتروني وتفاعلاتها بالصوت.",
+                ),
+            ),
         ),
         LabSubject(
             id = LabSubjectId.PHYSICS,

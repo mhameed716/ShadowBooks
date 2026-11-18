@@ -46,7 +46,7 @@ import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.LabCatalog
 import com.shadowbooks.data.LabSubjectId
 
-private enum class AppDestination { Welcome, Main, VolumeChooser, Reader, LabSubject }
+private enum class AppDestination { Welcome, Main, VolumeChooser, Reader, LabSubject, ExperimentPlayer }
 
 private enum class MainTab { Library, Lab }
 
@@ -59,6 +59,7 @@ fun ShadowBooksApp() {
         mutableStateOf(BookVolume(selectedBook.title, selectedBook.fileName))
     }
     var selectedLabSubjectId by remember { mutableStateOf(LabSubjectId.CHEMISTRY) }
+    var selectedExperimentId by remember { mutableStateOf("chem_periodic_table") }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         BackHandler(enabled = destination != AppDestination.Welcome) {
@@ -71,6 +72,7 @@ fun ShadowBooksApp() {
                     }
                 }
                 AppDestination.VolumeChooser -> destination = AppDestination.Main
+                AppDestination.ExperimentPlayer -> destination = AppDestination.LabSubject
                 AppDestination.LabSubject -> destination = AppDestination.Main
                 AppDestination.Main -> {
                     if (activeTab == MainTab.Lab) {
@@ -130,10 +132,25 @@ fun ShadowBooksApp() {
             AppDestination.LabSubject -> LabSubjectScreen(
                 subject = LabCatalog.findSubject(selectedLabSubjectId),
                 onBack = { destination = AppDestination.Main },
-                onSelectExperiment = { _ ->
-                    // Interactive experiment screens will be wired here step-by-step
+                onSelectExperiment = { experiment ->
+                    selectedExperimentId = experiment.id
+                    destination = AppDestination.ExperimentPlayer
                 },
             )
+
+            AppDestination.ExperimentPlayer -> when (selectedExperimentId) {
+                "chem_periodic_table" -> PeriodicTableScreen(
+                    onBack = { destination = AppDestination.LabSubject },
+                )
+                else -> LabSubjectScreen(
+                    subject = LabCatalog.findSubject(selectedLabSubjectId),
+                    onBack = { destination = AppDestination.Main },
+                    onSelectExperiment = { experiment ->
+                        selectedExperimentId = experiment.id
+                        destination = AppDestination.ExperimentPlayer
+                    },
+                )
+            }
         }
     }
 }

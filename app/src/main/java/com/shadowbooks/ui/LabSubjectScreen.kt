@@ -237,9 +237,21 @@ private fun ExperimentRow(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = experiment.unitTitle,
-                    color = Color(0xFF9BAEC4),
+                    color = accent.copy(alpha = 0.9f),
                     fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (experiment.summary.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = experiment.summary,
+                    color = Color(0xFF9BAEC4),
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
