@@ -44,14 +44,17 @@ import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 
 @Composable
-fun LibraryScreen(onSelectBook: (Book) -> Unit) {
+fun LibraryScreen(
+    applySystemBarsPadding: Boolean = true,
+    onSelectBook: (Book) -> Unit,
+) {
     val shelves = BookCatalog.books.chunked(3)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0A1020))
-            .systemBarsPadding(),
+            .then(if (applySystemBarsPadding) Modifier.systemBarsPadding() else Modifier),
     ) {
         Row(
             modifier = Modifier
