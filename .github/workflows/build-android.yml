@@ -2,7 +2,7 @@ name: Build ShadowBooks Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, arena/b4e6cf40-shadowbooks]
   workflow_dispatch:
     inputs:
       edition:
@@ -19,10 +19,12 @@ permissions:
 
 jobs:
   build:
+    # Ordinary pushes to the trial branch must not start a build.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[trial-apk]')
     runs-on: ubuntu-latest
     env:
-      # A manual run is light by default; only an explicit full run (or the existing main push) fetches books.
-      TRIAL_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.edition != 'full' }}
+      # Positive allowlist for textbook downloads. No push to the trial branch can select full.
+      FULL_BOOKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.edition == 'full') }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -42,18 +44,18 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Download all textbook PDFs into app assets
-        if: env.TRIAL_ONLY != 'true'
+        if: env.FULL_BOOKS == 'true'
         run: bash scripts/download_books.sh
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Test and build the lightweight trial only
-        if: env.TRIAL_ONLY == 'true'
+        if: env.FULL_BOOKS != 'true'
         run: bash ./gradlew --no-daemon :app:testTrialUnitTest :app:assembleTrial
 
       - name: Check trial contents, package ID and APK signature
-        if: env.TRIAL_ONLY == 'true'
+        if: env.FULL_BOOKS != 'true'
         run: |
           set -euo pipefail
           apk=app/build/outputs/apk/trial/app-trial.apk
@@ -65,7 +67,7 @@ jobs:
           python3 scripts/verify_trial_apk.py "$RUNNER_TEMP/ShadowBooks-Trial.apk" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Publish trial APK
-        if: env.TRIAL_ONLY == 'true'
+        if: env.FULL_BOOKS != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ShadowBooks-Trial-APK
@@ -75,11 +77,11 @@ jobs:
           compression-level: 0
 
       - name: Build debug APK with bundled books
-        if: env.TRIAL_ONLY != 'true'
+        if: env.FULL_BOOKS == 'true'
         run: bash ./gradlew --no-daemon :app:assembleDebug
 
       - name: Publish full APK artifact
-        if: env.TRIAL_ONLY != 'true'
+        if: env.FULL_BOOKS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ShadowBooks-debug-apk
