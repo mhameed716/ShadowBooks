@@ -1,179 +1,222 @@
 package com.shadowbooks.ui
 
-import androidx.compose.foundation.Canvas
+import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shadowbooks.R
+
+private const val HeroAspect = 953f / 672f
+private val Navy = Color(0xFF02132D)
+private val Gold = Color(0xFFFFD263)
+private val Cyan = Color(0xFF00CBFF)
+private val SeaGlass = Color(0xFF88F0F8)
+private val GoldRuleBrush = Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.16f), Gold, Gold.copy(alpha = 0.16f)))
+private val EnterBrush = Brush.verticalGradient(listOf(Color(0xFF19E4F6), Color(0xFF00C8F3), Color(0xFF00ACF2)))
+private val Tajawal = FontFamily(
+    Font(R.font.tajawal_regular, FontWeight.Normal),
+    Font(R.font.tajawal_extrabold, FontWeight.ExtraBold),
+)
 
 @Composable
 fun WelcomeScreen(onEnter: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF121E35), Color(0xFF0A1020), Color(0xFF080D18)),
-                ),
-            ),
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize().background(Navy).safeDrawingPadding(),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val glowCenter = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.2f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF236B91).copy(alpha = 0.22f), Color.Transparent),
-                    center = glowCenter,
-                    radius = size.minDimension * 0.72f,
-                ),
-                center = glowCenter,
-                radius = size.minDimension * 0.72f,
+        // Avoid a screen-sized illustration in short landscape or split-screen windows.
+        val panelWidth = minOf(maxWidth, 520.dp, (maxHeight * 0.7f).coerceAtLeast(340.dp))
+        val bodyMinHeight = (maxHeight - panelWidth / HeroAspect).coerceAtLeast(0.dp)
+        Column(
+            modifier = Modifier.width(panelWidth).fillMaxHeight().verticalScroll(rememberScrollState()),
+        ) {
+            // Keep the emblem, wordmark and neon book together: no cropping, tint or RTL mirroring.
+            Image(
+                painter = painterResource(R.drawable.welcome_hero),
+                contentDescription = stringResource(R.string.welcome_identity),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().aspectRatio(HeroAspect),
             )
+            WelcomeDetails(panelWidth, bodyMinHeight, onEnter)
         }
+    }
+}
 
+@Composable
+private fun WelcomeDetails(width: Dp, minHeight: Dp, onEnter: () -> Unit) {
+    val scale = (width.value / 390f).coerceIn(0.80f, 1.30f)
+    Box(Modifier.fillMaxWidth()) {
+        Image(
+            painter = painterResource(R.drawable.welcome_night),
+            contentDescription = null,
+            modifier = Modifier.matchParentSize(),
+            contentScale = ContentScale.FillBounds,
+        )
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
-                .padding(horizontal = 26.dp, vertical = 22.dp),
+                .fillMaxWidth()
+                .heightIn(min = minHeight)
+                .padding(top = 2.dp, bottom = 28.dp * scale),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.MenuBook,
-                    contentDescription = null,
-                    tint = Color(0xFF72D9FF),
-                    modifier = Modifier.size(22.dp),
+            Column(Modifier.padding(horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                WelcomeLabel(
+                    R.string.welcome_title, (29 * scale).sp, Color.White, FontWeight.ExtraBold,
+                    modifier = Modifier.semantics { heading() },
                 )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "SHADOWBOOKS",
-                    color = Color(0xFFEAF7FF),
-                    fontSize = 13.sp,
-                    letterSpacing = 2.2.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+                Spacer(Modifier.height(3.dp * scale))
+                WelcomeLabel(R.string.welcome_subtitle, (25 * scale).sp, SeaGlass)
             }
-
+            Column(Modifier.padding(top = 14.dp * scale), horizontalAlignment = Alignment.CenterHorizontally) {
+                RuledLine(Modifier.fillMaxWidth(), labelMaxWidth = width * 0.84f) {
+                    WelcomeLabel(R.string.welcome_project, (20 * scale).sp, Gold, FontWeight.ExtraBold)
+                }
+                Spacer(Modifier.height(8.dp * scale))
+                RuledLine(Modifier.fillMaxWidth(0.85f), labelMaxWidth = width * 0.60f, diamonds = true) {
+                    WelcomeLabel(R.string.welcome_year, (18 * scale).sp, Color(0xFFCDDFEE), style = FontStyle.Italic)
+                }
+            }
+            WelcomeLabel(
+                R.string.welcome_wish, (21 * scale).sp, Color.White, FontWeight.ExtraBold,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 18.dp * scale),
+            )
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 30.dp * scale),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
             ) {
-                OpenBookBadge()
-                Spacer(Modifier.height(30.dp))
-                Text(
-                    text = "مناهج الصف الثالث ثانوي",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color(0xFFF7FAFF),
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "مكتبتك المدرسية الرقمية",
-                    color = Color(0xFFB7C6DA),
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(24.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Box(Modifier.size(5.dp).background(Color(0xFF65D4FA), RoundedCornerShape(50)))
-                    Spacer(Modifier.width(8.dp))
-                    Text("13 كتاباً • المنهج اليمني", color = Color(0xFF8FA4BC), fontSize = 12.sp)
-                }
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Button(
-                    onClick = onEnter,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(58.dp)
-                        .shadow(12.dp, RoundedCornerShape(18.dp)),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF65D4FA),
-                        contentColor = Color(0xFF081421),
-                    ),
-                ) {
-                    Text("دخول", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(14.dp))
-                Text("إعداد: محمد حجر", color = Color(0xFFAAB9CC), fontSize = 13.sp)
+                EnterButton(scale, onEnter)
+                Spacer(Modifier.height(16.dp * scale))
+                WelcomeLabel(R.string.welcome_credit, (17 * scale).sp, Color(0xFFB7CADB))
             }
         }
     }
 }
 
 @Composable
-private fun OpenBookBadge() {
-    Box(
-        modifier = Modifier
-            .size(154.dp)
-            .shadow(24.dp, RoundedCornerShape(42.dp))
-            .background(
-                Brush.linearGradient(listOf(Color(0xFF1E6485), Color(0xFF13253F), Color(0xFF0D172B))),
-                RoundedCornerShape(42.dp),
-            ),
-        contentAlignment = Alignment.Center,
+private fun WelcomeLabel(
+    @StringRes label: Int,
+    size: TextUnit,
+    color: Color,
+    weight: FontWeight = FontWeight.Normal,
+    modifier: Modifier = Modifier,
+    style: FontStyle = FontStyle.Normal,
+) {
+    Text(
+        text = stringResource(label),
+        modifier = modifier,
+        color = color,
+        fontFamily = Tajawal,
+        fontSize = size,
+        lineHeight = size * 1.35f,
+        letterSpacing = 0.sp,
+        fontWeight = weight,
+        fontStyle = style,
+        textAlign = TextAlign.Center,
+    )
+}
+
+@Composable
+private fun RuledLine(
+    modifier: Modifier,
+    labelMaxWidth: Dp,
+    diamonds: Boolean = false,
+    label: @Composable () -> Unit,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(122.dp)
-                .background(Color.White.copy(alpha = 0.035f), RoundedCornerShape(34.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.MenuBook,
-                contentDescription = null,
-                tint = Color(0xFFE9F9FF),
-                modifier = Modifier.size(82.dp),
-            )
+        GoldRule(Modifier.weight(1f), if (diamonds) Alignment.CenterStart else null)
+        Box(Modifier.widthIn(max = labelMaxWidth)) { label() }
+        GoldRule(Modifier.weight(1f), if (diamonds) Alignment.CenterEnd else null)
+    }
+}
+
+@Composable
+private fun GoldRule(modifier: Modifier, diamond: Alignment?) {
+    Box(modifier.height(12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(GoldRuleBrush))
+        if (diamond != null) {
+            Box(Modifier.align(diamond).size(8.dp).rotate(45f).background(Gold))
         }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(13.dp)
-                .size(27.dp)
-                .background(Color(0xFF65D4FA), RoundedCornerShape(9.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("S", color = Color(0xFF0A1725), fontSize = 14.sp, fontWeight = FontWeight.Black)
-        }
+    }
+}
+
+@Composable
+private fun EnterButton(scale: Float, onEnter: () -> Unit) {
+    Button(
+        onClick = onEnter,
+        modifier = Modifier
+            .fillMaxWidth(0.89f)
+            .heightIn(min = (55.dp * scale).coerceAtLeast(48.dp))
+            .drawBehind {
+                // Paint outside the pill, not over its text or Material press indication.
+                for (layer in 12 downTo 1) {
+                    val spread = 14.dp.toPx() * layer / 12f
+                    drawRoundRect(
+                        color = Cyan.copy(alpha = 0.012f + 0.002f * (12 - layer)),
+                        topLeft = Offset(-spread, -spread),
+                        size = Size(size.width + spread * 2, size.height + spread * 2),
+                        cornerRadius = CornerRadius(size.height / 2 + spread),
+                    )
+                }
+            }
+            .background(EnterBrush, CircleShape),
+        shape = CircleShape,
+        border = BorderStroke(1.dp, Color(0xFF48EAFF)),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Navy),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        WelcomeLabel(R.string.welcome_enter, (28 * scale).sp, Navy, FontWeight.ExtraBold)
     }
 }
