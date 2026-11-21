@@ -4,8 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -15,58 +16,50 @@ import com.shadowbooks.data.BookVolume
 
 private enum class AppDestination { Welcome, Library, VolumeChooser, Reader }
 
+private fun Book.availableVolumes() = volumes.ifEmpty { listOf(BookVolume(title, fileName)) }
+
 @Composable
-fun ShadowBooksApp() {
-    var destination by remember { mutableStateOf(AppDestination.Welcome) }
-    var selectedBook by remember { mutableStateOf(BookCatalog.books.first()) }
-    var selectedVolume by remember {
-        mutableStateOf(BookVolume(selectedBook.title, selectedBook.fileName))
+fun ShadowBooksApp(onExit: () -> Unit) {
+    // Task saved state, NOT preferences: Android can recreate a backgrounded task, but a new
+    // task after full exit must not resurrect the old session. Persist only stable catalog IDs.
+    var destination by rememberSaveable { mutableStateOf(AppDestination.Welcome) }
+    var bookNumber by rememberSaveable { mutableIntStateOf(0) }
+    var volumeFile by rememberSaveable { mutableStateOf("") }
+    val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
+    val volume = book?.availableVolumes()?.find { it.fileName == volumeFile }
+    val screen = when {
+        destination == AppDestination.Reader && volume == null -> AppDestination.Library
+        destination == AppDestination.VolumeChooser && book == null -> AppDestination.Library
+        else -> destination
     }
-
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        BackHandler(enabled = destination != AppDestination.Welcome) {
-            destination = when (destination) {
-                AppDestination.Reader -> {
-                    if (selectedBook.volumes.size > 1) AppDestination.VolumeChooser else AppDestination.Library
-                }
-                AppDestination.VolumeChooser -> AppDestination.Library
-                AppDestination.Library -> AppDestination.Welcome
-                AppDestination.Welcome -> AppDestination.Welcome
-            }
+    val back: () -> Unit = {
+        when (screen) {
+            AppDestination.Reader -> destination = if (book != null && book.volumes.size > 1) {
+                AppDestination.VolumeChooser
+            } else AppDestination.Library
+            AppDestination.VolumeChooser -> destination = AppDestination.Library
+            AppDestination.Library -> destination = AppDestination.Welcome
+            AppDestination.Welcome -> onExit()
         }
-
-        when (destination) {
-            AppDestination.Welcome -> WelcomeScreen {
-                destination = AppDestination.Library
-            }
-            AppDestination.Library -> LibraryScreen { book: Book ->
-                selectedBook = book
-                val volumes = book.volumes.ifEmpty { listOf(BookVolume(book.title, book.fileName)) }
-                if (volumes.size > 1) {
-                    destination = AppDestination.VolumeChooser
-                } else {
-                    selectedVolume = volumes.first()
-                    destination = AppDestination.Reader
-                }
+    }
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        BackHandler(onBack = back)
+        when (screen) {
+            AppDestination.Welcome -> WelcomeScreen { destination = AppDestination.Library }
+            AppDestination.Library -> LibraryScreen { selected ->
+                bookNumber = selected.number
+                val volumes = selected.availableVolumes()
+                volumeFile = volumes.first().fileName
+                destination = if (volumes.size > 1) AppDestination.VolumeChooser else AppDestination.Reader
             }
             AppDestination.VolumeChooser -> VolumeChooserScreen(
-                book = selectedBook,
-                onBack = { destination = AppDestination.Library },
-                onSelectVolume = { volume ->
-                    selectedVolume = volume
+                book = checkNotNull(book), onBack = back,
+                onSelectVolume = { selected ->
+                    volumeFile = selected.fileName
                     destination = AppDestination.Reader
                 },
             )
-            AppDestination.Reader -> PdfReaderScreen(
-                volume = selectedVolume,
-                onBack = {
-                    destination = if (selectedBook.volumes.size > 1) {
-                        AppDestination.VolumeChooser
-                    } else {
-                        AppDestination.Library
-                    }
-                },
-            )
+            AppDestination.Reader -> PdfReaderScreen(volume = checkNotNull(volume), onBack = back)
         }
     }
 }

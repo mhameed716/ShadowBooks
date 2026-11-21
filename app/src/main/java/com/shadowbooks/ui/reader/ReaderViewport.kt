@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
@@ -71,5 +72,25 @@ internal class ReaderViewport(
         panFraction = if (overflow > 0f) ((x * after.width - at.x - pan.x) / overflow).coerceIn(0f, 1f) else 0.5f
         val offset = after.top + y * after.height - at.y - pan.y
         list.requestScrollToItem(item.index, offset.roundToInt())
+    }
+
+    companion object {
+        /** The LazyListState saves its physical index and pixel offset separately. Keep the same
+         * page geometry while restoring that offset, even before its bitmap has loaded again. */
+        fun saver(list: LazyListState, count: Int, estimate: Float) = listSaver<ReaderViewport, Any>(
+            save = { view ->
+                val index = list.firstVisibleItemIndex
+                listOf(view.fit.name, view.zoom, view.panFraction, index, view.aspects[index] ?: estimate)
+            },
+            restore = { saved ->
+                ReaderViewport(list, count, estimate).apply {
+                    fit = PageFit.entries.firstOrNull { it.name == saved[0] } ?: PageFit.WholePage
+                    zoom = (saved[1] as Float).coerceIn(1f, 4f)
+                    panFraction = (saved[2] as Float).coerceIn(0f, 1f)
+                    val index = saved[3] as Int
+                    if (index in 0 until count) noteAspect(index, saved[4] as Float)
+                }
+            },
+        )
     }
 }

@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.util.LruCache
+import com.shadowbooks.BuildConfig
 import java.io.File
 import java.io.IOException
 import kotlin.math.roundToInt
@@ -65,12 +66,15 @@ internal class ReaderDocument private constructor(
     companion object {
         /** Blocking; call on IO. Publish the cached PDF only after the asset was copied in full. */
         fun open(context: Context, fileName: String): ReaderDocument {
+            // Only the physical asset is shared. Callers still use the selected volume's own
+            // fileName for bookmarks, navigation and saved reading position.
+            val assetName = if (BuildConfig.BUILD_TYPE == "trial") "reader-sample.pdf" else fileName
             val dir = File(context.cacheDir, "shadowbooks-pdf").apply { mkdirs() }
-            val file = File(dir, fileName)
+            val file = File(dir, assetName)
             if (file.length() == 0L) {
                 val tmp = File.createTempFile("book-", ".part", dir)
                 try {
-                    context.assets.open("books/$fileName").use { input ->
+                    context.assets.open("books/$assetName").use { input ->
                         tmp.outputStream().use { output -> input.copyTo(output) }
                     }
                     if (!tmp.renameTo(file) && file.length() == 0L) throw IOException("Cannot cache PDF")
