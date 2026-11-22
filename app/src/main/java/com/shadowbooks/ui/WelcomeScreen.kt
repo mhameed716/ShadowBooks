@@ -29,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -68,6 +69,7 @@ private val Tajawal = FontFamily(
 
 @Composable
 fun WelcomeScreen(onEnter: () -> Unit) {
+    val phase = rememberWelcomePhase()
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(Navy).safeDrawingPadding(),
         contentAlignment = Alignment.TopCenter,
@@ -78,28 +80,26 @@ fun WelcomeScreen(onEnter: () -> Unit) {
         Column(
             modifier = Modifier.width(panelWidth).fillMaxHeight().verticalScroll(rememberScrollState()),
         ) {
-            // Keep the emblem, wordmark and neon book together: no cropping, tint or RTL mirroring.
-            Image(
-                painter = painterResource(R.drawable.welcome_hero),
-                contentDescription = stringResource(R.string.welcome_identity),
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().aspectRatio(HeroAspect),
-            )
-            WelcomeDetails(panelWidth, bodyMinHeight, onEnter)
+            Box(Modifier.fillMaxWidth().aspectRatio(HeroAspect)) {
+                WelcomeBackdrop(WelcomePlane.Sky, phase, Modifier.matchParentSize())
+                // Original emblem, wordmark and neon book: fixed above the moving blue sky.
+                Image(
+                    painter = painterResource(R.drawable.welcome_hero),
+                    contentDescription = stringResource(R.string.welcome_identity),
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+            WelcomeDetails(panelWidth, bodyMinHeight, phase, onEnter)
         }
     }
 }
 
 @Composable
-private fun WelcomeDetails(width: Dp, minHeight: Dp, onEnter: () -> Unit) {
+private fun WelcomeDetails(width: Dp, minHeight: Dp, phase: State<Float>, onEnter: () -> Unit) {
     val scale = (width.value / 390f).coerceIn(0.80f, 1.30f)
     Box(Modifier.fillMaxWidth()) {
-        Image(
-            painter = painterResource(R.drawable.welcome_night),
-            contentDescription = null,
-            modifier = Modifier.matchParentSize(),
-            contentScale = ContentScale.FillBounds,
-        )
+        WelcomeBackdrop(WelcomePlane.Night, phase, Modifier.matchParentSize())
         Column(
             modifier = Modifier
                 .fillMaxWidth()
