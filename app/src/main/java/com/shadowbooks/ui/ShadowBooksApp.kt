@@ -1,6 +1,7 @@
 package com.shadowbooks.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -25,6 +26,8 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     var destination by rememberSaveable { mutableStateOf(AppDestination.Welcome) }
     var bookNumber by rememberSaveable { mutableIntStateOf(0) }
     var volumeFile by rememberSaveable { mutableStateOf("") }
+    // Keep the selected shelf in view when returning from a book or its volume chooser.
+    val libraryScroll = rememberLazyListState()
     val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
     val volume = book?.availableVolumes()?.find { it.fileName == volumeFile }
     val screen = when {
@@ -46,7 +49,7 @@ fun ShadowBooksApp(onExit: () -> Unit) {
         BackHandler(onBack = back)
         when (screen) {
             AppDestination.Welcome -> WelcomeScreen { destination = AppDestination.Library }
-            AppDestination.Library -> LibraryScreen { selected ->
+            AppDestination.Library -> LibraryScreen(state = libraryScroll) { selected ->
                 bookNumber = selected.number
                 val volumes = selected.availableVolumes()
                 volumeFile = volumes.first().fileName
