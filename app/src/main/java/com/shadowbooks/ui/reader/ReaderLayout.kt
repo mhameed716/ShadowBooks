@@ -1,5 +1,7 @@
 package com.shadowbooks.ui.reader
 
+import kotlin.math.roundToInt
+
 internal enum class PageFit { WholePage, PageWidth }
 
 /** All coordinates are physical pixels, independent of the direction of the Arabic controls. */
@@ -22,6 +24,11 @@ internal fun layoutPage(viewWidth: Int, viewHeight: Int, aspect: Float, fit: Pag
     val boundedWidth = minOf(width, 30_000f * ratio)
     val height = boundedWidth / ratio
     return PageLayout(boundedWidth, height, maxOf(viewHeight.toFloat(), height))
+}
+
+internal fun resizedPageOffset(before: PageLayout, localY: Float, after: PageLayout, viewportHeight: Int): Int {
+    val fraction = ((localY - before.top) / before.height).coerceIn(0f, 1f)
+    return (after.top + fraction * after.height - viewportHeight / 2f).roundToInt()
 }
 
 internal fun Int.arabicDigits(): String = toString().map { ('٠'.code + it.digitToInt()).toChar() }.joinToString("")

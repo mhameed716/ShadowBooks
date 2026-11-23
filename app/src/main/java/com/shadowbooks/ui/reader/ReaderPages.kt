@@ -81,7 +81,7 @@ internal fun ReaderPages(
         onClickLabel = stringResource(R.string.reader_reveal),
         onClick = onReveal,
     ) else Modifier
-    Box(Modifier.fillMaxSize().onSizeChanged { view.size = it }.then(reveal).pointerInput(view) {
+    Box(Modifier.fillMaxSize().onSizeChanged(view::resize).then(reveal).pointerInput(view) {
         // Intercept only multi-touch. One finger belongs to the native lazy list (drag/fling)
         // or to horizontal pan on an enlarged page; a pinch must not accidentally turn a page.
         awaitEachGesture {

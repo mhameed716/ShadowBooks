@@ -35,6 +35,18 @@ class ReaderLayoutTest {
         }
     }
 
+    @Test fun foldingTheCalculatorKeepsTheSamePointOnAZoomedSheet() {
+        for (fit in PageFit.entries) {
+            val full = layoutPage(400, 800, 0.65f, fit, 2f)
+            val split = layoutPage(400, 350, 0.65f, fit, 2f)
+            val originalY = full.top + full.height * 0.60f
+            val offset = resizedPageOffset(full, originalY, split, 350)
+            assertEquals(0.60f, (175f + offset - split.top) / split.height, 0.002f)
+            val restored = resizedPageOffset(split, 175f + offset, full, 800)
+            assertEquals(originalY, 400f + restored, 2f)
+        }
+    }
+
     @Test fun jumpAcceptsTheThreeNumberFormsAndChecksBothEnds() {
         for (text in listOf("24", "٢٤", "۲۴", " ٢4 ")) assertEquals(23, pageIndexForInput(text, 180))
         assertEquals(0, pageIndexForInput("١", 180))

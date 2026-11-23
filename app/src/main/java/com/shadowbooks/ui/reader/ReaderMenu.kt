@@ -2,6 +2,7 @@ package com.shadowbooks.ui.reader
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
@@ -28,9 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -42,6 +45,8 @@ internal fun ReaderMenu(
     modifier: Modifier,
     night: Boolean,
     fit: PageFit,
+    calculatorOpen: Boolean,
+    onCalculator: () -> Unit,
     onNight: () -> Unit,
     onFit: (PageFit) -> Unit,
     onBookmarks: () -> Unit,
@@ -76,6 +81,9 @@ internal fun ReaderMenu(
             } else {
                 Feature(R.string.reader_night, Icons.Filled.NightsStay, checked = night, onClick = { onNight(); expanded = false })
                 HorizontalDivider()
+                Feature(R.string.calc_name, ImageVector.vectorResource(R.drawable.reader_calculator), detail = stringResource(R.string.calc_detail),
+                    active = calculatorOpen, onClick = { expanded = false; onCalculator() })
+                HorizontalDivider()
                 Feature(R.string.reader_page_view, Icons.Filled.AspectRatio, detail = stringResource(fit.label()), onClick = { fitChoices = true })
                 HorizontalDivider()
                 Feature(R.string.reader_bookmarks, Icons.Filled.BookmarkBorder, onClick = { expanded = false; onBookmarks() })
@@ -90,7 +98,7 @@ internal fun ReaderMenu(
 private fun PageFit.label(): Int = if (this == PageFit.WholePage) R.string.reader_fit_page else R.string.reader_fit_width
 
 @Composable
-private fun Feature(@StringRes label: Int, icon: ImageVector, detail: String? = null, checked: Boolean? = null, onClick: () -> Unit) {
+private fun Feature(@StringRes label: Int, icon: ImageVector, detail: String? = null, checked: Boolean? = null, active: Boolean = false, onClick: () -> Unit) {
     DropdownMenuItem(
         text = {
             Column {
@@ -98,10 +106,15 @@ private fun Feature(@StringRes label: Int, icon: ImageVector, detail: String? = 
                 if (detail != null) Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        modifier = if (checked == null) Modifier else Modifier.semantics { role = Role.Switch; toggleableState = ToggleableState(checked) },
+        modifier = when {
+            checked != null -> Modifier.semantics { role = Role.Switch; toggleableState = ToggleableState(checked) }
+            active -> Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)).semantics { selected = true }
+            else -> Modifier
+        },
         leadingIcon = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
         trailingIcon = {
             if (checked != null) Switch(checked = checked, onCheckedChange = null)
+            else if (active) Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary)
             else Icon(Icons.Filled.ChevronLeft, null)
         },
         onClick = onClick,

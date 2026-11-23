@@ -19,6 +19,7 @@ internal class ReaderViewport(
     private val estimatedAspect: Float,
 ) {
     var size by mutableStateOf(IntSize.Zero)
+        private set
     var fit by mutableStateOf(PageFit.WholePage)
         private set
     var zoom by mutableFloatStateOf(1f)
@@ -37,6 +38,19 @@ internal class ReaderViewport(
     fun noteAspect(index: Int, aspect: Float) { aspects[index] = aspect }
 
     fun layout(index: Int): PageLayout = layoutPage(size.width, size.height, aspects[index] ?: estimatedAspect, fit, zoom)
+
+    /** Keep the same point on the same physical PDF sheet under the center of the resized pane. */
+    fun resize(next: IntSize) {
+        if (next == size || next.width <= 0 || next.height <= 0) return
+        val middle = size.height / 2f
+        val item = list.layoutInfo.visibleItemsInfo.firstOrNull { middle >= it.offset && middle < it.offset + it.size }
+        val old = item?.takeIf { size.width > 0 && size.height > 0 }?.let { layout(it.index) }
+        size = next
+        if (item != null && old != null) {
+            val offset = resizedPageOffset(old, middle - item.offset, layout(item.index), next.height)
+            list.requestScrollToItem(item.index, offset)
+        }
+    }
 
     fun jump(index: Int) {
         list.requestScrollToItem(index.coerceIn(0, count - 1))

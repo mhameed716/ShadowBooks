@@ -2,9 +2,13 @@ package com.shadowbooks.ui
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -28,17 +32,23 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.shadowbooks.R
+import com.shadowbooks.calculator.CalculatorState
 import com.shadowbooks.data.BookVolume
+import com.shadowbooks.ui.reader.ReaderCalculator
+import com.shadowbooks.ui.reader.calculatorSaver
 import com.shadowbooks.ui.reader.ReaderBookmarks
 import com.shadowbooks.ui.reader.ReaderDocument
 import com.shadowbooks.ui.reader.ReaderIcon
@@ -141,27 +151,58 @@ private fun OpenBook(document: ReaderDocument, volume: BookVolume, night: Boolea
             showZoom = false
         }
     }
-    BackHandler(enabled = focused) { focused = false }
-    Box(Modifier.fillMaxSize()) {
-        ReaderPages(document, view, volume.title, night, focused, onReveal = { focused = false })
-        if (!focused) {
-            // In this RTL overlay Start is physical right, End is physical left.
-            ReaderIcon(Icons.AutoMirrored.Filled.ArrowBack, R.string.reader_back, Modifier.align(Alignment.TopStart), onClick = onBack)
-            ReaderMenu(
-                modifier = Modifier.align(Alignment.TopEnd), night = night, fit = view.fit,
-                onNight = onNight, onFit = view::setPageFit,
-                onBookmarks = { bookmarkPage = view.currentIndex + 1 },
-                onFocus = {
-                    focused = true
-                    Toast.makeText(context, R.string.reader_focus_hint, Toast.LENGTH_SHORT).show()
-                },
-                onOpen = { focusManager.clearFocus() },
-            )
-            ReaderNavigation(view, Modifier.align(Alignment.BottomCenter))
-            if (showZoom) Text(
-                stringResource(R.string.reader_zoom_percent, (view.zoom * 100).roundToInt().arabicDigits()),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp),
-                color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge,
+    var calculatorOpen by rememberSaveable { mutableStateOf(false) }
+    var calculatorShare by rememberSaveable { mutableFloatStateOf(.45f) }
+    val clipboard = LocalClipboardManager.current
+    var calculator by rememberSaveable(stateSaver = calculatorSaver) { mutableStateOf(CalculatorState()) }
+    val fold = { focusManager.clearFocus(); calculatorOpen = false; calculator = calculator.copy(menu = null) }
+    BackHandler(enabled = focused || calculatorOpen) { if (calculatorOpen) fold() else focused = false }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val available = maxHeight
+        val heightPx = with(LocalDensity.current) { available.toPx() }.coerceAtLeast(1f)
+        val paneHeight = (available * calculatorShare).coerceIn(minOf(128.dp, available * .45f),
+            available - minOf(120.dp, available * .45f))
+        val resize: (Float) -> Unit = { delta -> calculatorShare = (calculatorShare + delta).coerceIn(.30f, .68f) }
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                // Keep the PDF and its LazyList in the same composition when folding/unfolding the tool.
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        ReaderPages(document, view, volume.title, night, focused, onReveal = { focused = false })
+                    }
+                    if (calculatorOpen && !focused) ReaderNavigation(view, Modifier.background(MaterialTheme.colorScheme.surface))
+                }
+                if (!focused) {
+                    // In this RTL overlay Start is physical right, End is physical left.
+                    ReaderIcon(Icons.AutoMirrored.Filled.ArrowBack, R.string.reader_back, Modifier.align(Alignment.TopStart),
+                        onClick = if (calculatorOpen) fold else onBack)
+                    ReaderMenu(
+                        modifier = Modifier.align(Alignment.TopEnd), night = night, fit = view.fit,
+                        calculatorOpen = calculatorOpen, onCalculator = { if (calculatorOpen) fold() else calculatorOpen = true },
+                        onNight = onNight, onFit = view::setPageFit,
+                        onBookmarks = { bookmarkPage = view.currentIndex + 1 },
+                        onFocus = {
+                            fold(); focused = true
+                            Toast.makeText(context, R.string.reader_focus_hint, Toast.LENGTH_SHORT).show()
+                        },
+                        onOpen = { focusManager.clearFocus() },
+                    )
+                    if (!calculatorOpen) ReaderNavigation(view, Modifier.align(Alignment.BottomCenter))
+                    if (showZoom) Text(
+                        stringResource(R.string.reader_zoom_percent, (view.zoom * 100).roundToInt().arabicDigits()),
+                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp),
+                        color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+            if (calculatorOpen) ReaderCalculator(
+                calculator, onKey = { key ->
+                    calculator = calculator.press(key, readClipboard = { clipboard.getText()?.text },
+                        writeClipboard = { clipboard.setText(AnnotatedString(it)) })
+                }, onState = { calculator = it },
+                onResult = { request, result -> calculator = calculator.finishWork(request, result) }, onFold = fold,
+                onDrag = { resize(-it / heightPx) }, onNudge = resize,
+                modifier = Modifier.fillMaxWidth().height(paneHeight),
             )
         }
         bookmarkPage?.let { page ->
