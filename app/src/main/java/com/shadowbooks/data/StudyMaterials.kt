@@ -18,7 +18,7 @@ object StudyMaterialCatalog {
     const val GENERAL_ISLAMIC_NUMBER = 0
 
     private const val ROOT = "study"
-    private val islamicBookNumbers = setOf(1, 2, 3, 4, 5)
+    private val islamicBookNumbers = setOf(2, 3, 4, 5)
     private val numberedPdf = Regex("^(\\d{1,2})[-_](.+)\\.pdf$", RegexOption.IGNORE_CASE)
 
     fun isIslamicBook(number: Int): Boolean = number in islamicBookNumbers
@@ -26,7 +26,7 @@ object StudyMaterialCatalog {
     fun belongsToIslamicGroup(number: Int): Boolean =
         number == GENERAL_ISLAMIC_NUMBER || isIslamicBook(number)
 
-    /** Combine general Islamic PDFs (00) with Quran, faith, fiqh, hadith, and seerah (01–05). */
+    /** Combine general Islamic PDFs (00) with faith, fiqh, hadith, and seerah (02–05); keep Quran (01) separate. */
     fun islamicGroupFiles(filesByBook: Map<Int, List<StudyMaterialFile>>): List<StudyMaterialFile> =
         filesByBook.filterKeys(::belongsToIslamicGroup)
             .values.flatten()

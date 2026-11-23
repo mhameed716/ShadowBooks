@@ -24,7 +24,7 @@ class StudyMaterialsTest {
         assertEquals("exam", file.kind.name.lowercase())
     }
 
-    @Test fun generalIslamicModelsJoinQuranFaithFiqhHadithAndSeerah() {
+    @Test fun islamicGroupIncludesFaithFiqhHadithAndSeerahButKeepsQuranSeparate() {
         val files = StudyMaterialCatalog.fromAssetNames(
             StudyMaterialKind.Exam,
             listOf(
@@ -38,9 +38,11 @@ class StudyMaterialsTest {
             ),
         ).groupBy(StudyMaterialFile::bookNumber)
 
-        assertEquals(listOf(0, 1, 2, 3, 4, 5), StudyMaterialCatalog.islamicGroupFiles(files).map { it.bookNumber })
+        assertEquals(listOf(0, 2, 3, 4, 5), StudyMaterialCatalog.islamicGroupFiles(files).map { it.bookNumber })
         assertTrue(StudyMaterialCatalog.belongsToIslamicGroup(0))
         assertTrue(StudyMaterialCatalog.isIslamicBook(4))
+        assertFalse(StudyMaterialCatalog.belongsToIslamicGroup(1))
+        assertFalse(StudyMaterialCatalog.isIslamicBook(1))
         assertFalse(StudyMaterialCatalog.belongsToIslamicGroup(6))
         assertTrue(StudyMaterialCatalog.fromAssetNames(StudyMaterialKind.Summary, listOf("00-general-islamic-models.pdf")).isEmpty())
     }
