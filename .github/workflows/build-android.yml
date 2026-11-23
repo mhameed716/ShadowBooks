@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       edition:
-        description: 'Trial: one sample, no textbook downloads. Full: all textbooks.'
+        description: 'Trial: one sample, no downloads. Full: all textbooks and Quran recitation.'
         type: choice
         options:
           - trial
@@ -19,12 +19,12 @@ permissions:
 
 jobs:
   build:
-    # Ordinary pushes to the trial branch must not start a build.
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[trial-apk]')
+    # Trial-branch pushes stay quiet unless explicitly tagged for a trial or a full build.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[trial-apk]') || contains(github.event.head_commit.message, '[full-apk]')
     runs-on: ubuntu-latest
     env:
-      # Positive allowlist for textbook and Quran-audio downloads. Trial-branch pushes cannot select full.
-      FULL_BOOKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.edition == 'full') }}
+      # Main builds full by default; the working branch opts into full only with [full-apk].
+      FULL_BOOKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/b4e6cf40-shadowbooks' && contains(github.event.head_commit.message, '[full-apk]')) || (github.event_name == 'workflow_dispatch' && inputs.edition == 'full') }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
