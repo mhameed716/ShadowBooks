@@ -57,14 +57,13 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 
 // White paper -> navy, black ink -> ivory. The file and cached bitmaps remain untouched.
-private val nightFilter = ColorFilter.colorMatrix(
-    ColorMatrix(floatArrayOf(
-        -0.92f, 0f, 0f, 0f, 245f,
-        0f, -0.85f, 0f, 0f, 239f,
-        0f, 0f, -0.75f, 0f, 233f,
-        0f, 0f, 0f, 1f, 0f,
-    )),
+private val nightMatrix = floatArrayOf(
+    -0.92f, 0f, 0f, 0f, 245f,
+    0f, -0.85f, 0f, 0f, 239f,
+    0f, 0f, -0.75f, 0f, 233f,
+    0f, 0f, 0f, 1f, 0f,
 )
+private val nightFilter = ColorFilter.colorMatrix(ColorMatrix(nightMatrix))
 
 @Composable
 internal fun ReaderPages(
@@ -73,6 +72,7 @@ internal fun ReaderPages(
     title: String,
     night: Boolean,
     focus: Boolean,
+    arabicPages: IntArray,
     onReveal: () -> Unit,
 ) {
     val reveal = if (focus) Modifier.clickable(
@@ -101,7 +101,7 @@ internal fun ReaderPages(
         if (view.size.width > 0 && view.size.height > 0) {
             LazyColumn(state = view.list, modifier = Modifier.fillMaxSize()) {
                 items(count = document.pageCount, key = { it }) { index ->
-                    PdfPage(document, view, title, index, night)
+                    PdfPage(document, view, title, index, night, if (index in arabicPages) document.arabicText(index) else null)
                 }
             }
             if (!focus && view.count > 1 && view.list.isScrollInProgress) {
@@ -119,17 +119,17 @@ internal fun ReaderPages(
 }
 
 @Composable
-private fun PdfPage(document: ReaderDocument, view: ReaderViewport, title: String, index: Int, night: Boolean) {
-    var page by remember(document, index) { mutableStateOf<RenderedPage?>(null) }
-    var failed by remember(document, index) { mutableStateOf(false) }
+private fun PdfPage(document: ReaderDocument, view: ReaderViewport, title: String, index: Int, night: Boolean, arabicText: String?) {
+    var page by remember(document, index, arabicText) { mutableStateOf<RenderedPage?>(null) }
+    var failed by remember(document, index, arabicText) { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
     // A second resolution tier improves enlarged text without rasterizing every pinch frame.
     val target = (view.size.width * if (view.zoom >= 1.5f) 2f else 1.15f).roundToInt().coerceIn(640, 2304)
     val bucket = ((target + 127) / 128) * 128
-    LaunchedEffect(document, index, bucket, retry) {
+    LaunchedEffect(document, index, bucket, arabicText, retry) {
         failed = false
         try {
-            val rendered = document.page(index, bucket)
+            val rendered = document.page(index, bucket, arabicText != null)
             view.noteAspect(index, rendered.aspect)
             page = rendered
         } catch (e: CancellationException) {
@@ -151,11 +151,14 @@ private fun PdfPage(document: ReaderDocument, view: ReaderViewport, title: Strin
     ) {
         val image = remember(page) { page?.bitmap?.asImageBitmap() }
         when {
-            image != null -> Canvas(Modifier.fillMaxSize().semantics { contentDescription = description }) {
+            image != null -> Canvas(Modifier.fillMaxSize().semantics {
+                contentDescription = if (arabicText == null) description else "$description\n$arabicText"
+            }) {
+                val at = IntOffset(layout.left(view.size.width, view.panFraction).roundToInt(), layout.top.roundToInt())
+                val extent = IntSize(layout.width.roundToInt().coerceAtLeast(1), layout.height.roundToInt().coerceAtLeast(1))
                 drawImage(
                     image = image,
-                    dstOffset = IntOffset(layout.left(view.size.width, view.panFraction).roundToInt(), layout.top.roundToInt()),
-                    dstSize = IntSize(layout.width.roundToInt().coerceAtLeast(1), layout.height.roundToInt().coerceAtLeast(1)),
+                    dstOffset = at, dstSize = extent,
                     colorFilter = if (night) nightFilter else null,
                     filterQuality = FilterQuality.Medium,
                 )

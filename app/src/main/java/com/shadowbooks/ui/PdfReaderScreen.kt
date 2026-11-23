@@ -54,7 +54,10 @@ import com.shadowbooks.ui.reader.ReaderDocument
 import com.shadowbooks.ui.reader.ReaderIcon
 import com.shadowbooks.ui.reader.ReaderMenu
 import com.shadowbooks.ui.reader.ReaderNavigation
+import com.shadowbooks.ui.reader.PageTranslationButton
 import com.shadowbooks.ui.reader.ReaderPages
+import com.shadowbooks.ui.reader.AN_NUR_AUDIO_ASSET
+import com.shadowbooks.ui.reader.QuranAudioPlayer
 import com.shadowbooks.ui.reader.ReaderTheme
 import com.shadowbooks.ui.reader.ReaderViewport
 import com.shadowbooks.ui.reader.arabicDigits
@@ -131,6 +134,9 @@ private fun OpenBook(document: ReaderDocument, volume: BookVolume, night: Boolea
     val saver = remember(list, count, aspect) { ReaderViewport.saver(list, count, aspect) }
     // A fresh renderer on foregrounding the same volume is not a new reading session.
     val view = rememberSaveable(volume.fileName, count, list, saver = saver) { ReaderViewport(list, count, aspect) }
+    var arabicPages by rememberSaveable { mutableStateOf(intArrayOf()) }
+    val pageIndex = view.currentIndex
+    val hasArabic = document.arabicText(pageIndex) != null
     val readingView = LocalView.current
     LifecycleResumeEffect(readingView) {
         val previous = readingView.keepScreenOn
@@ -139,6 +145,10 @@ private fun OpenBook(document: ReaderDocument, volume: BookVolume, night: Boolea
     }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val showQuranAudio = remember(context, volume.fileName) {
+        volume.fileName == "quran-and-its-sciences.pdf" &&
+            runCatching { context.assets.open(AN_NUR_AUDIO_ASSET).use { } }.isSuccess
+    }
     var focused by rememberSaveable { mutableStateOf(false) }
     var bookmarkPage by rememberSaveable { mutableStateOf<Int?>(null) }
     var lastZoom by remember { mutableFloatStateOf(view.zoom) }
@@ -168,7 +178,15 @@ private fun OpenBook(document: ReaderDocument, volume: BookVolume, night: Boolea
                 // Keep the PDF and its LazyList in the same composition when folding/unfolding the tool.
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxWidth().weight(1f)) {
-                        ReaderPages(document, view, volume.title, night, focused, onReveal = { focused = false })
+                        ReaderPages(document, view, volume.title, night, focused, arabicPages, onReveal = { focused = false })
+                        if (!focused) {
+                            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                                if (hasArabic) PageTranslationButton(pageIndex in arabicPages, pageIndex, onClick = {
+                                    arabicPages = document.toggleArabic(pageIndex, arabicPages)
+                                }, modifier = Modifier.padding(end = 6.dp, bottom = 2.dp))
+                                if (!calculatorOpen) ReaderNavigation(view)
+                            }
+                        }
                     }
                     if (calculatorOpen && !focused) ReaderNavigation(view, Modifier.background(MaterialTheme.colorScheme.surface))
                 }
@@ -187,12 +205,17 @@ private fun OpenBook(document: ReaderDocument, volume: BookVolume, night: Boolea
                         },
                         onOpen = { focusManager.clearFocus() },
                     )
-                    if (!calculatorOpen) ReaderNavigation(view, Modifier.align(Alignment.BottomCenter))
                     if (showZoom) Text(
                         stringResource(R.string.reader_zoom_percent, (view.zoom * 100).roundToInt().arabicDigits()),
                         modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp),
                         color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge,
                     )
+                    if (showQuranAudio) {
+                        QuranAudioPlayer(
+                            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                                .padding(horizontal = 14.dp).padding(top = 52.dp),
+                        )
+                    }
                 }
             }
             if (calculatorOpen) ReaderCalculator(

@@ -1,5 +1,6 @@
 package com.shadowbooks.data
 
+import com.shadowbooks.ui.reader.PreparedPupilBook
 import com.shadowbooks.R
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -19,6 +20,13 @@ class LibraryCatalogTest {
             ),
             books.map { it.coverRes },
         )
+    }
+
+    @Test fun onlyFullStudentVolumeIsAPreparedTranslationCandidate() {
+        val files = BookCatalog.books.flatMap { b -> b.volumes.map { it.fileName }.ifEmpty { listOf(b.fileName) } }
+        assertEquals(listOf("english-student-book.pdf"), files.filter { PreparedPupilBook.isCandidate(it, trial = false) })
+        assertEquals(emptyList<String>(), files.filter { PreparedPupilBook.isCandidate(it, trial = true) })
+        assertEquals(false, PreparedPupilBook.isCandidate("reader-sample.pdf", trial = false))
     }
 
     @Test fun thirteenCoversStillAddressFifteenDistinctVolumes() {

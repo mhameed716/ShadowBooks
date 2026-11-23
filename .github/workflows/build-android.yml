@@ -23,7 +23,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[trial-apk]')
     runs-on: ubuntu-latest
     env:
-      # Positive allowlist for textbook downloads. No push to the trial branch can select full.
+      # Positive allowlist for textbook and Quran-audio downloads. Trial-branch pushes cannot select full.
       FULL_BOOKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.edition == 'full') }}
     steps:
       - name: Check out source
@@ -43,7 +43,7 @@ jobs:
       - name: Install Android 35 SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Download all textbook PDFs into app assets
+      - name: Prepare books and Quran audio for the full build
         if: env.FULL_BOOKS == 'true'
         run: bash scripts/download_books.sh
 
@@ -76,9 +76,19 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-      - name: Build debug APK with bundled books
+      - name: Build debug APK with bundled books and Quran audio
         if: env.FULL_BOOKS == 'true'
-        run: bash ./gradlew --no-daemon :app:assembleDebug
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify packaged pupil translation and report actual sizes
+        if: env.FULL_BOOKS == 'true'
+        run: |
+          set -eo pipefail
+          python3 scripts/verify_prepared_book.py --apk app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify packaged Quran recitation
+        if: env.FULL_BOOKS == 'true'
+        run: python3 scripts/verify_quran_audio.py --apk app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Publish full APK artifact
         if: env.FULL_BOOKS == 'true'
