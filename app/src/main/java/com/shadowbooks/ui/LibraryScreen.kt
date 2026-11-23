@@ -75,6 +75,8 @@ private val Painter.artAspect: Float get() = intrinsicSize.width / intrinsicSize
 fun LibraryScreen(
     state: LazyListState = rememberLazyListState(),
     onSelectBook: (Book) -> Unit,
+    onOpenStudyResources: () -> Unit,
+    onOpenTimetable: () -> Unit,
 ) {
     val shelves = remember { BookCatalog.books.chunked(3) }
     val count = remember {
@@ -84,20 +86,35 @@ fun LibraryScreen(
         modifier = Modifier.fillMaxSize().background(LibraryNight).safeDrawingPadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
+        // Base shelf sizing on the original full safe area, not the height left after adding
+        // navigation. This keeps the library artwork at its existing scale in landscape too.
         val width = minOf(maxWidth, 600.dp, (maxHeight * 1.3f).coerceAtLeast(320.dp))
         val unit = width / BoardWidth
         // Keep the heading while browsing on a phone, but let it scroll out of the way
         // in a short window or at large accessibility font sizes.
         val pinHeader = maxHeight >= 400.dp && LocalDensity.current.fontScale <= 1.35f
-        LazyColumn(state = state, modifier = Modifier.width(width).fillMaxHeight()) {
-            if (pinHeader) {
-                stickyHeader(key = "library-header") { LibraryHeader(unit, count) }
-            } else {
-                item(key = "library-header") { LibraryHeader(unit, count) }
+        Column(Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                LazyColumn(state = state, modifier = Modifier.width(width).fillMaxHeight()) {
+                    if (pinHeader) {
+                        stickyHeader(key = "library-header") { LibraryHeader(unit, count) }
+                    } else {
+                        item(key = "library-header") { LibraryHeader(unit, count) }
+                    }
+                    itemsIndexed(shelves, key = { _, books -> books.first().number }) { index, books ->
+                        ShelfRow(unit, ShelfTextures[index % ShelfTextures.size], books, onSelectBook)
+                    }
+                }
             }
-            itemsIndexed(shelves, key = { _, books -> books.first().number }) { index, books ->
-                ShelfRow(unit, ShelfTextures[index % ShelfTextures.size], books, onSelectBook)
-            }
+            HomeBottomNavigation(
+                selected = HomeTab.Library,
+                onLibrary = {},
+                onStudyResources = onOpenStudyResources,
+                onTimetable = onOpenTimetable,
+            )
         }
     }
 }

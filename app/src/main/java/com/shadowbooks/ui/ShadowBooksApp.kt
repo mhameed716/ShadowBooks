@@ -15,32 +15,41 @@ import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
 
-private enum class AppDestination { Welcome, Library, VolumeChooser, Reader }
+private enum class AppDestination { Welcome, Library, Timetable, StudyResources, VolumeChooser, Reader }
 
 private fun Book.availableVolumes() = volumes.ifEmpty { listOf(BookVolume(title, fileName)) }
 
 @Composable
 fun ShadowBooksApp(onExit: () -> Unit) {
-    // Task saved state, NOT preferences: Android can recreate a backgrounded task, but a new
-    // task after full exit must not resurrect the old session. Persist only stable catalog IDs.
-    var destination by rememberSaveable { mutableStateOf(AppDestination.Welcome) }
+    // Library is the home tab so its active state is visible immediately on launch.
+    // Remember only stable IDs in the Android task; timetable entries live in preferences.
+    var destination by rememberSaveable { mutableStateOf(AppDestination.Library) }
     var bookNumber by rememberSaveable { mutableIntStateOf(0) }
     var volumeFile by rememberSaveable { mutableStateOf("") }
-    // Keep the selected shelf in view when returning from a book or its volume chooser.
+    var readerTitle by rememberSaveable { mutableStateOf("") }
+    var readerDescription by rememberSaveable { mutableStateOf("") }
+    var readerFromResources by rememberSaveable { mutableStateOf(false) }
     val libraryScroll = rememberLazyListState()
     val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
-    val volume = book?.availableVolumes()?.find { it.fileName == volumeFile }
+    val bookVolume = book?.availableVolumes()?.find { it.fileName == volumeFile }
+    val readerVolume = when {
+        destination != AppDestination.Reader -> null
+        readerFromResources && volumeFile.isNotBlank() -> BookVolume(readerTitle, volumeFile, readerDescription)
+        else -> bookVolume
+    }
     val screen = when {
-        destination == AppDestination.Reader && volume == null -> AppDestination.Library
+        destination == AppDestination.Reader && readerVolume == null -> AppDestination.Library
         destination == AppDestination.VolumeChooser && book == null -> AppDestination.Library
         else -> destination
     }
     val back: () -> Unit = {
         when (screen) {
-            AppDestination.Reader -> destination = if (book != null && book.volumes.size > 1) {
+            AppDestination.Reader -> destination = if (readerFromResources) AppDestination.StudyResources else if (book != null && book.volumes.size > 1) {
                 AppDestination.VolumeChooser
             } else AppDestination.Library
+            AppDestination.StudyResources -> destination = AppDestination.Library
             AppDestination.VolumeChooser -> destination = AppDestination.Library
+            AppDestination.Timetable -> destination = AppDestination.Library
             AppDestination.Library -> destination = AppDestination.Welcome
             AppDestination.Welcome -> onExit()
         }
@@ -49,20 +58,42 @@ fun ShadowBooksApp(onExit: () -> Unit) {
         BackHandler(onBack = back)
         when (screen) {
             AppDestination.Welcome -> WelcomeScreen { destination = AppDestination.Library }
-            AppDestination.Library -> LibraryScreen(state = libraryScroll) { selected ->
-                bookNumber = selected.number
-                val volumes = selected.availableVolumes()
-                volumeFile = volumes.first().fileName
-                destination = if (volumes.size > 1) AppDestination.VolumeChooser else AppDestination.Reader
-            }
+            AppDestination.Library -> LibraryScreen(
+                state = libraryScroll,
+                onSelectBook = { selected ->
+                    bookNumber = selected.number
+                    readerFromResources = false
+                    val volumes = selected.availableVolumes()
+                    volumeFile = volumes.first().fileName
+                    destination = if (volumes.size > 1) AppDestination.VolumeChooser else AppDestination.Reader
+                },
+                onOpenStudyResources = { destination = AppDestination.StudyResources },
+                onOpenTimetable = { destination = AppDestination.Timetable },
+            )
+            AppDestination.Timetable -> TimetableScreen(
+                onLibrary = { destination = AppDestination.Library },
+                onStudyResources = { destination = AppDestination.StudyResources },
+            )
+            AppDestination.StudyResources -> StudyResourcesScreen(
+                onLibrary = { destination = AppDestination.Library },
+                onTimetable = { destination = AppDestination.Timetable },
+                onOpen = { selected ->
+                    readerFromResources = true
+                    volumeFile = selected.fileName
+                    readerTitle = selected.title
+                    readerDescription = selected.description
+                    destination = AppDestination.Reader
+                },
+            )
             AppDestination.VolumeChooser -> VolumeChooserScreen(
                 book = checkNotNull(book), onBack = back,
                 onSelectVolume = { selected ->
+                    readerFromResources = false
                     volumeFile = selected.fileName
                     destination = AppDestination.Reader
                 },
             )
-            AppDestination.Reader -> PdfReaderScreen(volume = checkNotNull(volume), onBack = back)
+            AppDestination.Reader -> PdfReaderScreen(volume = checkNotNull(readerVolume), onBack = back)
         }
     }
 }
