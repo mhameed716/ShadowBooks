@@ -77,6 +77,7 @@ fun LibraryScreen(
     onSelectBook: (Book) -> Unit,
     onOpenStudyResources: () -> Unit,
     onOpenTimetable: () -> Unit,
+    onOpenDevicePdfs: () -> Unit,
 ) {
     val shelves = remember { BookCatalog.books.chunked(3) }
     val count = remember {
@@ -114,6 +115,7 @@ fun LibraryScreen(
                 onLibrary = {},
                 onStudyResources = onOpenStudyResources,
                 onTimetable = onOpenTimetable,
+                onDevicePdfs = onOpenDevicePdfs,
             )
         }
     }

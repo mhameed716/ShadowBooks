@@ -4,11 +4,14 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import android.util.LruCache
 import com.shadowbooks.BuildConfig
+import com.shadowbooks.data.BookVolume
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -95,6 +98,12 @@ internal class ReaderDocument private constructor(
             return try { PdfRenderer(fd) } catch (e: Exception) { fd.close(); throw e }
         }
 
+        private fun renderer(context: Context, uri: Uri): PdfRenderer {
+            val fd = context.contentResolver.openFileDescriptor(uri, "r")
+                ?: throw FileNotFoundException("Unable to open document: $uri")
+            return try { PdfRenderer(fd) } catch (e: Exception) { fd.close(); throw e }
+        }
+
         private fun translation(context: Context, dir: File, original: File, count: Int): CompanionPdf? {
             // Failure of an optional companion must never prevent reading the original.
             return try {
@@ -140,20 +149,21 @@ internal class ReaderDocument private constructor(
             return dir
         }
 
-        /** Blocking; called on IO. Only probe the reviewed edition for the actual full pupil volume. */
-        fun open(context: Context, fileName: String): ReaderDocument {
+        /** Blocking; called on IO. User-picked documents use their persisted SAF URI; packaged books stay assets. */
+        fun open(context: Context, volume: BookVolume): ReaderDocument {
             val trial = BuildConfig.BUILD_TYPE == "trial"
-            val assetName = if (trial) "reader-sample.pdf" else fileName
-            val candidate = PreparedPupilBook.isCandidate(fileName, trial)
+            val documentUri = volume.contentUri?.let { Uri.parse(it) }
+            val assetName = if (trial && documentUri == null) "reader-sample.pdf" else volume.fileName
+            val candidate = documentUri == null && PreparedPupilBook.isCandidate(volume.fileName, trial)
             val root = File(context.cacheDir, "shadowbooks-pdf")
             val dir = if (candidate) pupilCache(context, root) else root.apply { mkdirs() }
-            val file = cacheAsset(context, dir, "books/$assetName")
-            val pdf = renderer(file)
+            val file = if (documentUri == null) cacheAsset(context, dir, "books/$assetName") else null
+            val pdf = if (documentUri == null) renderer(checkNotNull(file)) else renderer(context, documentUri)
             return try {
                 val count = pdf.pageCount
                 require(count > 0)
                 val aspect = try { pdf.openPage(0).use { it.width.toFloat() / it.height } } catch (e: Exception) { 0.707f }
-                ReaderDocument(pdf, if (candidate) translation(context, dir, file, count) else null, count, aspect)
+                ReaderDocument(pdf, if (candidate) translation(context, dir, checkNotNull(file), count) else null, count, aspect)
             } catch (e: Exception) { pdf.close(); throw e }
         }
     }

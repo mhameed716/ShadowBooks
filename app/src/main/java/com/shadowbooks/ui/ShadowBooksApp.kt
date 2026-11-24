@@ -15,7 +15,7 @@ import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
 
-private enum class AppDestination { Welcome, Library, Timetable, StudyResources, VolumeChooser, Reader }
+private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader }
 
 private fun Book.availableVolumes() = volumes.ifEmpty { listOf(BookVolume(title, fileName)) }
 
@@ -28,12 +28,20 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     var volumeFile by rememberSaveable { mutableStateOf("") }
     var readerTitle by rememberSaveable { mutableStateOf("") }
     var readerDescription by rememberSaveable { mutableStateOf("") }
+    var readerContentUri by rememberSaveable { mutableStateOf("") }
     var readerFromResources by rememberSaveable { mutableStateOf(false) }
+    var readerFromDevicePdfs by rememberSaveable { mutableStateOf(false) }
     val libraryScroll = rememberLazyListState()
     val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
     val bookVolume = book?.availableVolumes()?.find { it.fileName == volumeFile }
     val readerVolume = when {
         destination != AppDestination.Reader -> null
+        readerContentUri.isNotBlank() -> BookVolume(
+            title = readerTitle,
+            fileName = volumeFile,
+            description = readerDescription,
+            contentUri = readerContentUri,
+        )
         readerFromResources && volumeFile.isNotBlank() -> BookVolume(readerTitle, volumeFile, readerDescription)
         else -> bookVolume
     }
@@ -44,10 +52,14 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     }
     val back: () -> Unit = {
         when (screen) {
-            AppDestination.Reader -> destination = if (readerFromResources) AppDestination.StudyResources else if (book != null && book.volumes.size > 1) {
-                AppDestination.VolumeChooser
-            } else AppDestination.Library
+            AppDestination.Reader -> destination = when {
+                readerFromDevicePdfs -> AppDestination.DevicePdfs
+                readerFromResources -> AppDestination.StudyResources
+                book != null && book.volumes.size > 1 -> AppDestination.VolumeChooser
+                else -> AppDestination.Library
+            }
             AppDestination.StudyResources -> destination = AppDestination.Library
+            AppDestination.DevicePdfs -> destination = AppDestination.Library
             AppDestination.VolumeChooser -> destination = AppDestination.Library
             AppDestination.Timetable -> destination = AppDestination.Library
             AppDestination.Library -> destination = AppDestination.Welcome
@@ -63,25 +75,46 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                 onSelectBook = { selected ->
                     bookNumber = selected.number
                     readerFromResources = false
+                    readerFromDevicePdfs = false
+                    readerContentUri = ""
                     val volumes = selected.availableVolumes()
                     volumeFile = volumes.first().fileName
                     destination = if (volumes.size > 1) AppDestination.VolumeChooser else AppDestination.Reader
                 },
                 onOpenStudyResources = { destination = AppDestination.StudyResources },
                 onOpenTimetable = { destination = AppDestination.Timetable },
+                onOpenDevicePdfs = { destination = AppDestination.DevicePdfs },
             )
             AppDestination.Timetable -> TimetableScreen(
                 onLibrary = { destination = AppDestination.Library },
                 onStudyResources = { destination = AppDestination.StudyResources },
+                onDevicePdfs = { destination = AppDestination.DevicePdfs },
             )
             AppDestination.StudyResources -> StudyResourcesScreen(
                 onLibrary = { destination = AppDestination.Library },
                 onTimetable = { destination = AppDestination.Timetable },
+                onDevicePdfs = { destination = AppDestination.DevicePdfs },
                 onOpen = { selected ->
                     readerFromResources = true
+                    readerFromDevicePdfs = false
+                    readerContentUri = ""
                     volumeFile = selected.fileName
                     readerTitle = selected.title
                     readerDescription = selected.description
+                    destination = AppDestination.Reader
+                },
+            )
+            AppDestination.DevicePdfs -> DevicePdfsScreen(
+                onLibrary = { destination = AppDestination.Library },
+                onStudyResources = { destination = AppDestination.StudyResources },
+                onTimetable = { destination = AppDestination.Timetable },
+                onOpen = { selected ->
+                    readerFromResources = false
+                    readerFromDevicePdfs = true
+                    volumeFile = selected.fileName
+                    readerTitle = selected.title
+                    readerDescription = selected.description
+                    readerContentUri = selected.contentUri.orEmpty()
                     destination = AppDestination.Reader
                 },
             )
@@ -89,6 +122,8 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                 book = checkNotNull(book), onBack = back,
                 onSelectVolume = { selected ->
                     readerFromResources = false
+                    readerFromDevicePdfs = false
+                    readerContentUri = ""
                     volumeFile = selected.fileName
                     destination = AppDestination.Reader
                 },

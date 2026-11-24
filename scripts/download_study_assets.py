@@ -113,7 +113,10 @@ def download_entry(commit: str, entry: dict[str, object], token: str | None) -> 
     if temporary.exists():
         raise SystemExit(f"Refusing to overwrite an existing partial download: {temporary}")
 
-    encoded_path = quote(relative.as_posix(), safe="/")
+    # Manifest paths are relative to app/src/main/assets, while the Contents API
+    # paths are relative to the repository root.
+    repository_path = f"app/src/main/assets/{relative.as_posix()}"
+    encoded_path = quote(repository_path, safe="/")
     url = (
         f"https://api.github.com/repos/{REPOSITORY}/contents/{encoded_path}"
         f"?ref={commit}"

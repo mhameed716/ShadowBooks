@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -30,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shadowbooks.R
 
-internal enum class HomeTab { Library, StudyResources, Timetable }
+internal enum class HomeTab { Library, StudyResources, Timetable, DevicePdfs }
 
 private val NavBackground = Color(0xFF081322)
 private val NavActive = Color(0xFF65D4FA)
@@ -43,14 +44,16 @@ internal fun HomeBottomNavigation(
     onLibrary: () -> Unit,
     onStudyResources: () -> Unit,
     onTimetable: () -> Unit,
+    onDevicePdfs: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().background(NavBackground)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF26374A)))
         Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
-            // RTL placement: timetable on the right, library in the middle, and resources directly to its left.
+            // RTL placement: timetable on the right; device PDFs are the fourth tab at the far left.
             NavItem("جدول الحصص", selected == HomeTab.Timetable, Icons.Filled.CalendarToday, onTimetable)
             NavItem("المكتبة", selected == HomeTab.Library, Icons.Filled.MenuBook, onLibrary)
             NavItem("ملخصات واختبارات", selected == HomeTab.StudyResources, Icons.Filled.Description, onStudyResources)
+            NavItem("ملفات الهاتف", selected == HomeTab.DevicePdfs, Icons.Filled.FolderOpen, onDevicePdfs)
         }
     }
 }
@@ -60,12 +63,12 @@ private fun RowScope.NavItem(label: String, selected: Boolean, icon: androidx.co
     Column(
         modifier = Modifier.weight(1f).height(64.dp)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(icon, contentDescription = null, tint = if (selected) NavActive else NavIdle, modifier = Modifier.size(21.dp))
-        Text(label, color = if (selected) NavActive else NavIdle, fontFamily = NavFont, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 10.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        Text(label, color = if (selected) NavActive else NavIdle, fontFamily = NavFont, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 9.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
         if (selected) Box(Modifier.padding(top = 3.dp).size(width = 20.dp, height = 2.dp).background(NavActive))
     }
 }

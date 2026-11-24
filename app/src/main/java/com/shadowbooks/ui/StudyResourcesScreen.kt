@@ -74,7 +74,12 @@ private data class StudyResourceCategory(
 )
 
 @Composable
-fun StudyResourcesScreen(onLibrary: () -> Unit, onTimetable: () -> Unit, onOpen: (BookVolume) -> Unit) {
+fun StudyResourcesScreen(
+    onLibrary: () -> Unit,
+    onTimetable: () -> Unit,
+    onDevicePdfs: () -> Unit,
+    onOpen: (BookVolume) -> Unit,
+) {
     val context = LocalContext.current
     val goldenUnits = remember(context) {
         StudyMaterialCatalog.goldenEnglishUnits(
@@ -218,6 +223,7 @@ fun StudyResourcesScreen(onLibrary: () -> Unit, onTimetable: () -> Unit, onOpen:
             onLibrary = onLibrary,
             onStudyResources = {},
             onTimetable = onTimetable,
+            onDevicePdfs = onDevicePdfs,
         )
     }
 

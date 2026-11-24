@@ -87,7 +87,7 @@ fun PdfReaderScreen(volume: BookVolume, onBack: () -> Unit) {
                 var owned: ReaderDocument? = null
                 try {
                     // Assign inside IO so cancellation on the return to Main cannot leak a renderer.
-                    withContext(Dispatchers.IO) { owned = ReaderDocument.open(context, volume.fileName) }
+                    withContext(Dispatchers.IO) { owned = ReaderDocument.open(context, volume) }
                     document = checkNotNull(owned)
                     awaitCancellation()
                 } catch (e: CancellationException) {

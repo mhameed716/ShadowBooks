@@ -7,6 +7,8 @@ data class BookVolume(
     val title: String,
     val fileName: String,
     val description: String = "",
+    /** Non-null only for user-selected PDFs opened through Android's Storage Access Framework. */
+    val contentUri: String? = null,
 )
 
 data class Book(

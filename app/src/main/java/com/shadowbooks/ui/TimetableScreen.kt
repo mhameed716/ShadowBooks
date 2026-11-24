@@ -130,7 +130,7 @@ private object TimetablePreferences {
 }
 
 @Composable
-fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit) {
+fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevicePdfs: () -> Unit) {
     val context = LocalContext.current
     val preferences = remember(context) { TimetablePreferences.open(context) }
     var schedule by remember(preferences) { mutableStateOf(TimetablePreferences.schedule(preferences)) }
@@ -232,6 +232,7 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit) {
             onLibrary = onLibrary,
             onStudyResources = onStudyResources,
             onTimetable = {},
+            onDevicePdfs = onDevicePdfs,
         )
     }
 
