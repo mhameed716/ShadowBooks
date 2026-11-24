@@ -7,7 +7,7 @@ from collections import Counter
 import hashlib
 from pathlib import Path
 import sys
-from zipfile import BadZipFile, ZipFile
+from zipfile import BadZipFile, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -16,9 +16,19 @@ from download_study_assets import SOURCE_ASSET_ROOT, git_blob_sha1, load_manifes
 CHUNK_SIZE = 1024 * 1024
 
 
+def archive_member_name(info: ZipInfo) -> str:
+    """Decode AAPT2's UTF-8 asset paths even when its ZIP entries omit the UTF-8 flag."""
+    if info.flag_bits & 0x800:
+        return info.filename
+    try:
+        return info.filename.encode("cp437").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return info.filename
+
+
 def apk_blob_sha1(archive: ZipFile, asset_path: str, expected_size: int, expected_blob: str) -> None:
     zip_path = f"assets/{asset_path}"
-    matching = [info for info in archive.infolist() if info.filename == zip_path]
+    matching = [info for info in archive.infolist() if archive_member_name(info) == zip_path]
     if len(matching) != 1:
         raise ValueError(f"Expected exactly one {zip_path!r} in the APK; found {len(matching)}")
     info = matching[0]
@@ -62,7 +72,7 @@ def verify(apk_path: Path) -> int:
 
     try:
         with ZipFile(apk_path) as archive:
-            name_counts = Counter(info.filename for info in archive.infolist())
+            name_counts = Counter(archive_member_name(info) for info in archive.infolist())
             expected_names = {f"assets/{path}" for path in expected}
             missing = sorted(expected_names - name_counts.keys())
             duplicates = sorted(name for name in expected_names if name_counts[name] > 1)
