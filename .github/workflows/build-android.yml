@@ -105,3 +105,13 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Preserve assembled APK if full-build verification fails
+        if: failure() && env.FULL_BOOKS == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadowBooks-debug-apk-unverified
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0

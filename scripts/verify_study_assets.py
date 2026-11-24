@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 from pathlib import Path
 import sys
@@ -61,6 +62,20 @@ def verify(apk_path: Path) -> int:
 
     try:
         with ZipFile(apk_path) as archive:
+            name_counts = Counter(info.filename for info in archive.infolist())
+            expected_names = {f"assets/{path}" for path in expected}
+            missing = sorted(expected_names - name_counts.keys())
+            duplicates = sorted(name for name in expected_names if name_counts[name] > 1)
+            names = name_counts.keys()
+            if missing or duplicates:
+                packaged_books = [
+                    name for name in names if name.startswith("assets/books/") and name.lower().endswith(".pdf")
+                ]
+                raise ValueError(
+                    f"APK asset-path check failed: {len(missing)} missing, {len(duplicates)} duplicated. "
+                    f"Missing examples: {missing[:5]}; duplicate examples: {duplicates[:5]}; "
+                    f"packaged PDF examples: {packaged_books[:10]}"
+                )
             for path, (size, blob) in sorted(expected.items()):
                 apk_blob_sha1(archive, path, size, blob)
     except (BadZipFile, OSError) as exc:
@@ -77,4 +92,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apk", type=Path, required=True, help="Full APK to inspect")
     args = parser.parse_args()
-    verify(args.apk)
+    try:
+        verify(args.apk)
+    except Exception as exc:
+        # Surface the exact failing APK entry as a check annotation; GitHub's raw
+        # action-log download is not always available to users of the build.
+        annotation = str(exc).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=Study asset APK verification::{annotation}", file=sys.stderr)
+        raise
