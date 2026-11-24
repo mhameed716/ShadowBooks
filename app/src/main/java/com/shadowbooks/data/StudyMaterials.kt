@@ -18,6 +18,21 @@ object StudyMaterialCatalog {
     const val GENERAL_ISLAMIC_NUMBER = 0
 
     private const val ROOT = "study"
+    const val GOLDEN_ENGLISH_FOLDER = "13-المميز_الذهبي_في_اللغة_الإنجليزية"
+    const val GOLDEN_ENGLISH_TITLE = "المميز الذهبي في اللغة الإنجليزية"
+    const val GOLDEN_ENGLISH_PATH = "$ROOT/summaries/$GOLDEN_ENGLISH_FOLDER"
+
+    /** Unit filenames start with a two-digit ordering prefix. */
+    fun goldenEnglishUnits(fileNames: List<String>): List<StudyMaterialFile> =
+        fileNames.mapNotNull { name ->
+            val match = numberedPdf.matchEntire(name) ?: return@mapNotNull null
+            val number = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+            if (number < 1) return@mapNotNull null
+            StudyMaterialFile(13, StudyMaterialKind.Summary, "$GOLDEN_ENGLISH_PATH/$name", match.groupValues[2].replace('_', ' ')) to number
+        }.sortedBy { it.second }.map { it.first }
+
+    fun goldenEnglishGroup(units: List<StudyMaterialFile>): StudyMaterialFile? =
+        if (units.isEmpty()) null else StudyMaterialFile(13, StudyMaterialKind.Summary, GOLDEN_ENGLISH_PATH, GOLDEN_ENGLISH_TITLE)
     private val islamicBookNumbers = setOf(2, 3, 4, 5)
     private val numberedPdf = Regex("^(\\d{1,2})[-_](.+)\\.pdf$", RegexOption.IGNORE_CASE)
 

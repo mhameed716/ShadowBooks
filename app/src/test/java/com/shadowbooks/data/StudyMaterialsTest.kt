@@ -6,6 +6,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StudyMaterialsTest {
+    @Test fun goldenEnglishUnitsAreGroupedAndOrdered() {
+        val units = StudyMaterialCatalog.goldenEnglishUnits(listOf(
+            "02-الوحدة_الثانية.pdf", "01-الوحدة_الأولى.pdf", "notes.txt",
+        ))
+        assertEquals(listOf("الوحدة الأولى", "الوحدة الثانية"), units.map { it.title })
+        assertEquals("study/summaries/${StudyMaterialCatalog.GOLDEN_ENGLISH_FOLDER}/01-الوحدة_الأولى.pdf", units.first().assetPath)
+        assertEquals(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE, StudyMaterialCatalog.goldenEnglishGroup(units)?.title)
+        assertEquals(null, StudyMaterialCatalog.goldenEnglishGroup(emptyList()))
+    }
+
     @Test fun onlyNumberedPdfsForKnownSubjectsAreShown() {
         val files = StudyMaterialCatalog.fromAssetNames(
             StudyMaterialKind.Summary,

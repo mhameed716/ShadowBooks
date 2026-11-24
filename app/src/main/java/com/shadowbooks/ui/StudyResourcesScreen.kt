@@ -4,6 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -73,12 +76,19 @@ private data class StudyResourceCategory(
 @Composable
 fun StudyResourcesScreen(onLibrary: () -> Unit, onTimetable: () -> Unit, onOpen: (BookVolume) -> Unit) {
     val context = LocalContext.current
-    val materials = remember(context) {
+    val goldenUnits = remember(context) {
+        StudyMaterialCatalog.goldenEnglishUnits(
+            context.assets.list("books/${StudyMaterialCatalog.GOLDEN_ENGLISH_PATH}")?.toList().orEmpty(),
+        )
+    }
+    val materials = remember(context, goldenUnits) {
         StudyMaterialKind.values().associateWith { kind ->
-            StudyMaterialCatalog.fromAssetNames(
+            val files = StudyMaterialCatalog.fromAssetNames(
                 kind,
                 context.assets.list("books/study/${kind.folder}")?.toList().orEmpty(),
-            ).groupBy(StudyMaterialFile::bookNumber)
+            )
+            val group = if (kind == StudyMaterialKind.Summary) StudyMaterialCatalog.goldenEnglishGroup(goldenUnits) else null
+            (files + listOfNotNull(group)).groupBy(StudyMaterialFile::bookNumber)
         }
     }
     var selectedKind by rememberSaveable { mutableStateOf(StudyMaterialKind.Exam.name) }
@@ -102,6 +112,11 @@ fun StudyResourcesScreen(onLibrary: () -> Unit, onTimetable: () -> Unit, onOpen:
         }
     }
     var chooseForCategory by remember { mutableStateOf<StudyResourceCategory?>(null) }
+    var choosingGoldenUnits by remember { mutableStateOf(false) }
+    val openMaterial: (StudyMaterialFile, String) -> Unit = { file, categoryTitle ->
+        if (file.assetPath == StudyMaterialCatalog.GOLDEN_ENGLISH_PATH) choosingGoldenUnits = true
+        else onOpen(file.asVolume(categoryTitle))
+    }
     val categories = listOf(StudyMaterialKind.Exam, StudyMaterialKind.Summary)
 
     Column(Modifier.fillMaxSize().background(StudyNight).safeDrawingPadding()) {
@@ -191,7 +206,7 @@ fun StudyResourcesScreen(onLibrary: () -> Unit, onTimetable: () -> Unit, onOpen:
                     StudySubjectCard(subject.title, subject.number, kind, files) {
                         when (files.size) {
                             0 -> Unit
-                            1 -> onOpen(files.single().asVolume(subject.title))
+                            1 -> openMaterial(files.single(), subject.title)
                             else -> chooseForCategory = subject
                         }
                     }
@@ -214,7 +229,7 @@ fun StudyResourcesScreen(onLibrary: () -> Unit, onTimetable: () -> Unit, onOpen:
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     category.files.forEach { file ->
-                        TextButton(onClick = { chooseForCategory = null; onOpen(file.asVolume(category.title)) }) {
+                        TextButton(onClick = { chooseForCategory = null; openMaterial(file, category.title) }) {
                             Icon(Icons.Filled.Description, contentDescription = null, tint = StudyCyan, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(file.title, color = Color.White, fontFamily = StudyFont, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -223,6 +238,26 @@ fun StudyResourcesScreen(onLibrary: () -> Unit, onTimetable: () -> Unit, onOpen:
                 }
             },
             confirmButton = { TextButton(onClick = { chooseForCategory = null }) { Text("إغلاق", color = StudyCyan, fontFamily = StudyFont) } },
+        )
+    }
+
+    if (choosingGoldenUnits) {
+        AlertDialog(
+            onDismissRequest = { choosingGoldenUnits = false },
+            containerColor = Color(0xFF13233A),
+            title = { Text(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE, color = Color.White, fontFamily = StudyFont, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    goldenUnits.forEach { unit ->
+                        TextButton(onClick = { choosingGoldenUnits = false; onOpen(unit.asVolume(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE)) }) {
+                            Icon(Icons.Filled.Description, contentDescription = null, tint = StudyCyan, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(unit.title, color = Color.White, fontFamily = StudyFont)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { choosingGoldenUnits = false }) { Text("إغلاق", color = StudyCyan, fontFamily = StudyFont) } },
         )
     }
 }
