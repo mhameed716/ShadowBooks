@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = android.graphics.Color.rgb(10, 16, 32)
         setContent {
             ShadowBooksTheme {
-                ShadowBooksApp()
+                ShadowBooksApp(onExit = { finishAndRemoveTask() })
             }
         }
     }

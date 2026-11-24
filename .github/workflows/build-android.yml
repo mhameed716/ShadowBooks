@@ -2,15 +2,29 @@ name: Build ShadowBooks Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, arena/b4e6cf40-shadowbooks]
   workflow_dispatch:
+    inputs:
+      edition:
+        description: 'Trial: one sample, no downloads. Full: all textbooks and Quran recitation.'
+        type: choice
+        options:
+          - trial
+          - full
+        default: trial
+        required: true
 
 permissions:
   contents: read
 
 jobs:
   build:
+    # Trial-branch pushes stay quiet unless explicitly tagged for a trial or a full build.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[trial-apk]') || contains(github.event.head_commit.message, '[full-apk]')
     runs-on: ubuntu-latest
+    env:
+      # Main builds full by default; the working branch opts into full only with [full-apk].
+      FULL_BOOKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/b4e6cf40-shadowbooks' && contains(github.event.head_commit.message, '[full-apk]')) || (github.event_name == 'workflow_dispatch' && inputs.edition == 'full') }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -29,19 +43,59 @@ jobs:
       - name: Install Android 35 SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Download all textbook PDFs into app assets
+      - name: Prepare books and Quran audio for the full build
+        if: env.FULL_BOOKS == 'true'
         run: bash scripts/download_books.sh
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK with bundled books
-        run: chmod +x ./gradlew && ./gradlew --no-daemon assembleDebug
+      - name: Test and build the lightweight trial only
+        if: env.FULL_BOOKS != 'true'
+        run: bash ./gradlew --no-daemon :app:testTrialUnitTest :app:assembleTrial
 
-      - name: Publish APK artifact
+      - name: Check trial contents, package ID and APK signature
+        if: env.FULL_BOOKS != 'true'
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/trial/app-trial.apk
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose "$apk"
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/trial-badging.txt"
+          grep "^package: name='com.shadowbooks.trial'" "$RUNNER_TEMP/trial-badging.txt"
+          cp "$apk" "$RUNNER_TEMP/ShadowBooks-Trial.apk"
+          python3 scripts/verify_trial_apk.py "$RUNNER_TEMP/ShadowBooks-Trial.apk" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish trial APK
+        if: env.FULL_BOOKS != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadowBooks-Trial-APK
+          path: ${{ runner.temp }}/ShadowBooks-Trial.apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Build debug APK with bundled books and Quran audio
+        if: env.FULL_BOOKS == 'true'
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify packaged pupil translation and report actual sizes
+        if: env.FULL_BOOKS == 'true'
+        run: |
+          set -eo pipefail
+          python3 scripts/verify_prepared_book.py --apk app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify packaged Quran recitation
+        if: env.FULL_BOOKS == 'true'
+        run: python3 scripts/verify_quran_audio.py --apk app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish full APK artifact
+        if: env.FULL_BOOKS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ShadowBooks-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
           retention-days: 14
           compression-level: 0
