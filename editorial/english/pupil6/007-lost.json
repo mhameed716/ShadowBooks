@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "volume": "english-student-book.pdf",
+  "edition": "English Course for Yemen, Pupil’s Book 6",
+  "sourceSha256": "49978ee372a8cd60887c08636cd736bd869aab9121acb059e86094f40aa10158",
+  "pageCount": 81,
+  "pdfPage": 7,
+  "printedPage": "2",
+  "lesson": "1.3",
+  "canvas": [1000, 1412],
+  "protected": [[0, 85, 123, 125], [579, 251, 887, 709], [112, 710, 309, 1295], [0, 1296, 1000, 1412]],
+  "masks": [
+    {"surface": "paper", "rect": [243, 90, 334, 140]},
+    {"surface": "paper", "rect": [241, 158, 812, 248]},
+    {"surface": "paper", "rect": [113, 256, 576, 708]},
+    {"surface": "paper", "rect": [309, 714, 814, 805]},
+    {"surface": "paper", "rect": [347, 812, 865, 1192]},
+    {"surface": "paper", "rect": [311, 1193, 797, 1234]},
+    {"surface": "paper", "rect": [311, 1241, 749, 1280]},
+    {"surface": "sign", "rect": [783, 314, 864, 338]}
+  ],
+  "sections": [
+    {"style": "heading", "face": "TajawalBold", "left": 237, "right": 334, "baseline": 118, "leading": 36, "size": 34, "entries": [
+      {"en": "Lost", "ar": ["ضائع"]}
+    ]},
+    {"style": "instruction", "face": "TajawalBold", "left": 249, "right": 799, "baseline": 184, "leading": 25, "size": 21.8, "entries": [
+      {"en": "Listen to how the passenger speaks. How does he feel?", "ar": ["استمع إلى طريقة كلام المسافر. بمَ يشعر؟"]},
+      {"en": "Answer the questions in Workbook activity A.", "ar": ["أجب عن أسئلة النشاط (A) في كتاب التمارين."]},
+      {"en": "Listen and repeat the conversation.", "ar": ["استمع إلى الحوار ثم ردّده."]}
+    ]},
+    {"style": "dialogue", "face": "Naskh", "speakerFace": "NaskhBold", "left": 116, "right": 566, "baseline": 282.7, "leading": 23.12, "size": 20.8, "speakerWidth": 80, "entries": [
+      {"en": "Passenger: Excuse me! Excuse me, miss!", "ar": ["عفوًا! عفوًا يا آنسة!"], "speaker": "المسافر"},
+      {"en": "Clerk: Can I help you, sir?", "ar": ["هل أستطيع مساعدتك يا سيدي؟"], "speaker": "الموظفة"},
+      {"en": "Passenger: Yes. I’ve just got off the plane from Paris, but my luggage hasn’t arrived yet.", "ar": ["نعم. نزلتُ للتوّ من الطائرة القادمة من باريس،", "لكنّ أمتعتي لم تصل بعد."], "speaker": "المسافر"},
+      {"en": "Clerk: Can you describe your luggage, sir?", "ar": ["هل يمكنك أن تصف أمتعتك يا سيدي؟"], "speaker": "الموظفة"},
+      {"en": "Passenger: What am I going to do? No clothes! Nothing!", "ar": ["ماذا سأفعل؟ لا ملابس معي! لا شيء!"], "speaker": "المسافر"},
+      {"en": "Clerk: Calm down, sir. There’s no point in getting upset. Now, can you describe your luggage?", "ar": ["اهدأ يا سيدي. لا فائدة من الانزعاج.", "والآن، هل يمكنك أن تصف أمتعتك؟"], "speaker": "الموظفة"},
+      {"en": "Passenger: Two suitcases.", "ar": ["حقيبتا سفر."], "speaker": "المسافر"},
+      {"en": "Clerk: Are they the same size?", "ar": ["هل هما بالحجم نفسه؟"], "speaker": "الموظفة"},
+      {"en": "Passenger: No. One is bigger than the other.", "ar": ["لا. إحداهما أكبر من الأخرى."], "speaker": "المسافر"},
+      {"en": "Clerk: Are they the same colour?", "ar": ["وهل هما باللون نفسه؟"], "speaker": "الموظفة"},
+      {"en": "Passenger: Well, they’re both green, but the smaller one is a very light green.", "ar": ["حسنًا، الحقيبتان خضراوان، لكنّ لون الصغرى", "أخضر فاتح جدًّا."], "speaker": "المسافر"},
+      {"en": "Clerk: Ok. What shape are they?", "ar": ["حسنًا. ما شكل كلٍّ منهما؟"], "speaker": "الموظفة"},
+      {"en": "Passenger: The larger one is rectangular. The smaller one is more square-looking.", "ar": ["الكبرى مستطيلة الشكل، أمّا الصغرى", "فشكلها أقرب إلى المربّع."], "speaker": "المسافر"},
+      {"en": "Clerk: Now, don’t worry, sir. Give me your luggage tags and we’ll soon find them.", "ar": ["والآن، لا تقلق يا سيدي. أعطني بطاقات أمتعتك،", "وسنعثر على حقيبتيك قريبًا."], "speaker": "الموظفة"}
+    ]},
+    {"style": "sign", "face": "Tajawal", "left": 784, "right": 862, "baseline": 329.5, "leading": 20, "size": 13.7, "color": "#e8bea6", "entries": [
+      {"en": "Information", "ar": ["الاستعلامات"]}
+    ]},
+    {"style": "instruction", "face": "TajawalBold", "left": 315, "right": 855, "baseline": 743, "leading": 25, "size": 21.8, "entries": [
+      {"en": "Listen to how the girl speaks. How does she feel?", "ar": ["استمع إلى طريقة كلام الفتاة. بمَ تشعر؟"]},
+      {"en": "Answer the question in Workbook activity C.", "ar": ["أجب عن سؤال النشاط (C) في كتاب التمارين."]},
+      {"en": "Listen and repeat the conversation.", "ar": ["استمع إلى الحوار ثم ردّده."]}
+    ]},
+    {"style": "dialogue", "face": "Naskh", "speakerFace": "NaskhBold", "left": 351, "right": 855, "baseline": 837, "leading": 23.06, "size": 20.8, "speakerWidth": 78, "entries": [
+      {"en": "Girl: Excuse me, officer. Can you help me, please? My name is June, and I’ve lost my sister, Kate.", "ar": ["عفوًا يا حضرة الشرطي. هل تساعدني من فضلك؟", "اسمي جُون، وقد ضاعت منّي أختي كيت."], "speaker": "الفتاة"},
+      {"en": "Officer: Oh, dear! How old is she?", "ar": ["يا إلهي! كم عمرها؟"], "speaker": "الشرطي"},
+      {"en": "Girl: Ten. She’s my twin sister. She’s the same age as me.", "ar": ["عشر سنوات. إنها أختي التوأم، وهي في سنّي."], "speaker": "الفتاة"},
+      {"en": "Officer: And does she look the same as you?", "ar": ["وهل تشبهكِ في الشكل؟"], "speaker": "الشرطي"},
+      {"en": "Girl: No, not really. She’s not as tall as me. And she’s a little bit fatter. She eats a lot you see.", "ar": ["لا، ليس تمامًا. ليست بطولي، وهي أسمن منّي قليلًا.", "فهي تأكل كثيرًا، كما ترى."], "speaker": "الفتاة"},
+      {"en": "Officer: Is her hair the same colours as yours?", "ar": ["هل ألوان شعرها كألوان شعركِ؟"], "speaker": "الشرطي"},
+      {"en": "Girl: Yes, but mine isn’t as long as hers. Hers is much longer.", "ar": ["نعم، لكنّ شعري ليس بطول شعرها. شعرها أطول بكثير."], "speaker": "الفتاة"},
+      {"en": "Officer: What is she wearing?", "ar": ["ماذا ترتدي؟"], "speaker": "الشرطي"},
+      {"en": "Girl: The same as I am ... except her T-shirt is red.", "ar": ["مثل ما أرتديه... إلا أنّ قميصها القصير الأكمام أحمر."], "speaker": "الفتاة"},
+      {"en": "Officer: And when did you last see her?", "ar": ["ومتى رأيتِها آخر مرة؟"], "speaker": "الشرطي"},
+      {"en": "Girl: Oh. About half an hour ago.", "ar": ["آه، قبل نحو نصف ساعة."], "speaker": "الفتاة"},
+      {"en": "Officer: All right. Don’t worry. Come along with me and we’ll soon find your sister.", "ar": ["حسنًا. لا تقلقي. تعالي معي", "وسنعثر على أختكِ قريبًا."], "speaker": "الشرطي"},
+      {"en": "Girl: Ok. Thank you.", "ar": ["حسنًا. شكرًا لك."], "speaker": "الفتاة"}
+    ]},
+    {"style": "instruction", "face": "TajawalBold", "left": 312, "right": 855, "baseline": 1218, "leading": 25, "size": 21.8, "entries": [
+      {"en": "Take turns to describe similar objects or people.", "ar": ["تناوبوا على وصف أشياء متشابهة أو أشخاص متشابهين."]}
+    ]},
+    {"style": "instruction", "face": "TajawalBold", "left": 312, "right": 855, "baseline": 1268, "leading": 25, "size": 21.8, "entries": [
+      {"en": "Now do activities C and D in the Workbook.", "ar": ["والآن، أنجز النشاطين (C) و(D) في كتاب التمارين."]}
+    ]}
+  ]
+}

@@ -1,4 +1,5 @@
 .gradle/
+.cxx/
 .idea/
 local.properties
 build/
@@ -7,3 +8,9 @@ build/
 # PDFs are fetched by scripts/download_books.sh during APK builds.
 app/src/main/assets/books/*.pdf
 app/src/main/assets/books/*.part
+# The full-build preparation script downloads the optional Quran recitation.
+app/src/main/assets/books/quran-audio/
+
+# This supplied edition is paired by digest with the prepared Arabic pages.
+!app/src/main/assets/books/english-student-book.pdf
+__pycache__/
