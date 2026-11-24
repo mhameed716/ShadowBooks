@@ -71,10 +71,12 @@ def verify(apk_path: Path) -> int:
                 packaged_books = [
                     name for name in names if name.startswith("assets/books/") and name.lower().endswith(".pdf")
                 ]
+                packaged_study = [name for name in packaged_books if "/study/" in name.lower()]
                 raise ValueError(
                     f"APK asset-path check failed: {len(missing)} missing, {len(duplicates)} duplicated. "
                     f"Missing examples: {missing[:5]}; duplicate examples: {duplicates[:5]}; "
-                    f"packaged PDF examples: {packaged_books[:10]}"
+                    f"packaged PDF count: {len(packaged_books)}; study PDF count: {len(packaged_study)}; "
+                    f"study path examples: {packaged_study[:25]}; other PDF examples: {packaged_books[:5]}"
                 )
             for path, (size, blob) in sorted(expected.items()):
                 apk_blob_sha1(archive, path, size, blob)
