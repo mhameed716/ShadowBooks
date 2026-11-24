@@ -21,9 +21,9 @@ private fun Book.availableVolumes() = volumes.ifEmpty { listOf(BookVolume(title,
 
 @Composable
 fun ShadowBooksApp(onExit: () -> Unit) {
-    // Library is the home tab so its active state is visible immediately on launch.
-    // Remember only stable IDs in the Android task; timetable entries live in preferences.
-    var destination by rememberSaveable { mutableStateOf(AppDestination.Library) }
+    // A fresh launch opens the welcome screen; the versioned key discards the old library-first saved route.
+    // Preserve navigation in Android's restored task; timetable entries live in preferences.
+    var destination by rememberSaveable(key = "app_destination_welcome_v1") { mutableStateOf(AppDestination.Welcome) }
     var bookNumber by rememberSaveable { mutableIntStateOf(0) }
     var volumeFile by rememberSaveable { mutableStateOf("") }
     var readerTitle by rememberSaveable { mutableStateOf("") }
