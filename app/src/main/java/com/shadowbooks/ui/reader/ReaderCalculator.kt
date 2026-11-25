@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
@@ -147,10 +148,25 @@ private fun CalculatorDisplay(state: CalculatorState, height: Dp) {
         Text(status, style = TextStyle(fontSize = 10.sp, fontFamily = FontFamily.Monospace), color = statusInk, maxLines = 1)
         val scroll = rememberScrollState()
         var viewport by remember { mutableIntStateOf(0) }; var caret by remember { mutableIntStateOf(0) }
+        // The entry is stored in plain function words; the screen prints the keypad symbols.
+        val pretty = remember(state.expression) { prettyExpression(state.expression) }
+        val shownCursor = pretty.indexMap[state.cursor.coerceIn(0, state.expression.length)]
         val input = buildAnnotatedString {
-            append(state.expression.take(state.cursor))
+            append(pretty.text.take(shownCursor))
             if (!state.complete) withStyle(SpanStyle(color = orange)) { append('│') }
-            append(state.expression.drop(state.cursor))
+            append(pretty.text.drop(shownCursor))
+            val caretShift = if (state.complete) 0 else 1
+            fun styled(range: IntRange, style: SpanStyle) {
+                var start = range.first
+                var end = range.last + 1
+                if (start >= shownCursor) start += caretShift
+                if (end > shownCursor) end += caretShift
+                if (end > start) addStyle(style, start, end)
+            }
+            val raisedStyle = SpanStyle(fontSize = 12.sp, baselineShift = BaselineShift.Superscript)
+            val loweredStyle = SpanStyle(fontSize = 12.sp, baselineShift = BaselineShift.Subscript)
+            pretty.raised.forEach { styled(it, raisedStyle) }
+            pretty.lowered.forEach { styled(it, loweredStyle) }
         }
         LaunchedEffect(caret, viewport, scroll.maxValue) {
             val at = when {
@@ -164,7 +180,7 @@ private fun CalculatorDisplay(state: CalculatorState, height: Dp) {
             Text(input, modifier = Modifier.semantics { contentDescription = "$inputLabel: ${state.expression}" },
                 softWrap = false, maxLines = 1, color = expressionInk,
                 style = TextStyle(fontSize = 17.sp, fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
-                onTextLayout = { layout -> if (layout.layoutInput.text == input) caret = layout.getCursorRect(state.cursor).left.roundToInt() })
+                onTextLayout = { layout -> if (layout.layoutInput.text == input) caret = layout.getCursorRect(shownCursor).left.roundToInt() })
         }
         val error = state.error
         if (error != null) {

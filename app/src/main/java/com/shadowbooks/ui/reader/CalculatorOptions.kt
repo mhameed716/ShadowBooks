@@ -58,7 +58,7 @@ internal fun CalculatorOptions(s: CalculatorState, change: (CalculatorState) -> 
                 CalcMenu.History -> {
                     if (s.history.isEmpty()) Text(stringResource(R.string.calc_empty_history))
                     for (i in s.history.indices.reversed()) TextButton(onClick = { change(s.chooseHistory(i)) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(s.history[i], textAlign = TextAlign.Left, fontFamily = FontFamily.Monospace)
+                        Text(prettyExpression(s.history[i]).text, textAlign = TextAlign.Left, fontFamily = FontFamily.Monospace)
                     }
                 }
                 CalcMenu.ClearVariables -> {
