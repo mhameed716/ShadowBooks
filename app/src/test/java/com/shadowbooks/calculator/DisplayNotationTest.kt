@@ -55,7 +55,7 @@ class DisplayNotationTest {
         assertEquals(source.length + 1, pretty.indexMap.size)
         assertEquals(0, pretty.indexMap[0])
         assertEquals(pretty.text.length, pretty.indexMap[source.length])
-        assertTrue(pretty.indexMap.zipWithNext().all { (a, b) -> a <= b })
+        assertTrue((1 until pretty.indexMap.size).all { i -> pretty.indexMap[i - 1] <= pretty.indexMap[i] })
         // The caret at the stored end lands at the printed end; inside "sqrt" it snaps to √.
         val sqrtAt = source.indexOf("sqrt")
         assertEquals(pretty.text.indexOf('√'), pretty.indexMap[sqrtAt])
