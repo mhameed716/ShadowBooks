@@ -291,6 +291,35 @@ for entry in "${ENGLISH_EXAMS[@]}"; do
   mv "$temporary" "$target"
 done
 
+# Chemistry exam PDFs (internal 09- prefix, hidden in the UI) shown beside the first file in the Chemistry exams card.
+CHEMISTRY_EXAMS=(
+  '09-بنك_اسئله_1.pdf|1Nv_ZewuBDcq-jlllYNa9qlI9bFAZYNpT'
+  '09-بنك_اسئله_2.pdf|1Ht4vL-DB7-zYMaSfRYmZu7wlR9WO6yxW'
+  '09-بنك_اسئله_3.pdf|1SMcix50U5FxfkMmMS7y0FCW6Lgbj8vNC'
+)
+for entry in "${CHEMISTRY_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading Chemistry exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
 pdf_count="$(find "$BOOKS_DIR" -maxdepth 1 -type f -name '*.pdf' | wc -l | tr -d ' ')"
 if [[ "$pdf_count" != "15" ]]; then
   echo "ERROR: expected 15 PDF files in $BOOKS_DIR, found $pdf_count." >&2
