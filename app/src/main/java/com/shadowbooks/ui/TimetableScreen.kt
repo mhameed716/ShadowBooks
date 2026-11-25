@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,18 +16,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
@@ -37,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -86,6 +92,9 @@ private val ScheduleRose = Color(0xFFFF9CA8)
 private val ScheduleFont = FontFamily(Font(R.font.tajawal_regular), Font(R.font.tajawal_extrabold, FontWeight.ExtraBold))
 private val Weekdays = SchoolWeek.days
 private val PeriodNames = listOf("الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة")
+private data class HistoryEntry(val day: Int, val period: Int, val status: String)
+private data class DayHistory(val dateKey: String, val entries: List<HistoryEntry>)
+
 private const val PreferenceFile = "shadowbooks_timetable"
 private const val DayWidth = 54
 private const val RowHeight = 64
@@ -127,6 +136,35 @@ private object TimetablePreferences {
     fun clearCompletion(prefs: SharedPreferences, date: String, day: Int, period: Int) {
         prefs.edit().remove("done-$date-$day-$period").apply()
     }
+
+    /** A free-text note attached to a weekly lesson cell; shown in the lesson file. */
+    fun note(prefs: SharedPreferences, day: Int, period: Int) =
+        prefs.getString("note-$day-$period", "").orEmpty()
+
+    fun saveNote(prefs: SharedPreferences, day: Int, period: Int, value: String) {
+        val editor = prefs.edit()
+        val key = "note-$day-$period"
+        if (value.isBlank()) editor.remove(key) else editor.putString(key, value.trim())
+        editor.apply()
+    }
+
+    /** Every saved studied/missed mark, newest day first; entries are kept indefinitely (months of history). */
+    fun history(prefs: SharedPreferences): List<DayHistory> {
+        val pattern = Regex("""^done-(\d{8})-(\d+)-(\d+)$""")
+        val byDate = sortedMapOf<String, MutableList<HistoryEntry>>(reverseOrder())
+        for ((key, value) in prefs.all) {
+            val match = pattern.matchEntire(key) ?: continue
+            val status = value as? String ?: continue
+            byDate.getOrPut(match.groupValues[1]) { mutableListOf() } += HistoryEntry(
+                day = match.groupValues[2].toInt(),
+                period = match.groupValues[3].toInt(),
+                status = status,
+            )
+        }
+        return byDate.map { (date, entries) ->
+            DayHistory(date, entries.sortedWith(compareBy({ it.day }, { it.period })))
+        }
+    }
 }
 
 @Composable
@@ -139,6 +177,14 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
             TimetablePreferences.subject(preferences, day, period)
         } })
     }
+    var notes by remember(preferences) {
+        mutableStateOf(List(Weekdays.size) { day -> List(BellSchedule.PERIOD_COUNT) { period ->
+            TimetablePreferences.note(preferences, day, period)
+        } })
+    }
+    var thursdayEnabled by remember(preferences) {
+        mutableStateOf(preferences.getBoolean("thursday_enabled", false))
+    }
     var clockMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
@@ -150,7 +196,11 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
         }
     }
     val now = remember(clockMillis / 1000L) { Date(clockMillis) }
-    val clockText = remember(clockMillis / 1000L) { SimpleDateFormat("HH:mm:ss", Locale.US).format(now) }
+    val clockText = remember(clockMillis / 1000L) {
+        // 12-hour display with an Arabic ص/م marker; the stored minutes stay 24-hour internally.
+        val hour24 = Calendar.getInstance().apply { time = now }.get(Calendar.HOUR_OF_DAY)
+        SimpleDateFormat("hh:mm:ss", Locale.US).format(now) + if (hour24 < 12) " ص" else " م"
+    }
     val dateText = remember(clockMillis / 60_000L) {
         SimpleDateFormat("EEEE، d MMMM", Locale.forLanguageTag("ar-YE")).format(now)
     }
@@ -165,6 +215,8 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var editCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var editSubject by remember { mutableStateOf("") }
+    var editNote by remember { mutableStateOf("") }
+    var recordsOpen by remember { mutableStateOf(false) }
     var completionCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var completionRevision by remember { mutableIntStateOf(0) }
 
@@ -182,6 +234,12 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
             detailsPeriod = detailsPeriod,
             activePeriod = activePeriod,
             onSettings = { detailsOpen = false; settingsOpen = true },
+            thursdayEnabled = thursdayEnabled,
+            onThursdayChange = { enabled ->
+                thursdayEnabled = enabled
+                preferences.edit().putBoolean("thursday_enabled", enabled).apply()
+            },
+            onOpenRecords = { detailsOpen = false; recordsOpen = true },
         )
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 2.dp),
@@ -202,11 +260,14 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             item(key = "period-heading") { PeriodHeading() }
-            itemsIndexed(Weekdays, key = { index, _ -> index }) { day, label ->
+            // Thursday is optional: when off, Wednesday stays the last school day.
+            val visibleDays = Weekdays.indices.filter { day -> thursdayEnabled || day != Weekdays.lastIndex }
+            itemsIndexed(visibleDays, key = { _, day -> day }) { _, day ->
                 ScheduleDayRow(
                     day = day,
-                    label = label,
+                    label = Weekdays[day],
                     subjects = subjects[day],
+                    notes = notes[day],
                     currentDay = currentDay == day,
                     activePeriod = if (currentDay == day) activePeriod else null,
                     minuteNow = minuteNow,
@@ -221,6 +282,7 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
                             completionCell = day to period
                         } else {
                             editSubject = subject
+                            editNote = notes[day][period]
                             editCell = day to period
                         }
                     },
@@ -242,13 +304,27 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
             containerColor = Color(0xFF13233A),
             title = { Text("${Weekdays[day]} · الحصة ${PeriodNames[period]}", color = Color.White, fontFamily = ScheduleFont, fontWeight = FontWeight.ExtraBold) },
             text = {
-                OutlinedTextField(
-                    value = editSubject,
-                    onValueChange = { if (it.length <= 40) editSubject = it },
-                    singleLine = true,
-                    label = { Text("اسم الحصة", fontFamily = ScheduleFont) },
-                    placeholder = { Text("مثال: رياضيات", fontFamily = ScheduleFont) },
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    OutlinedTextField(
+                        value = editSubject,
+                        onValueChange = { if (it.length <= 40) editSubject = it },
+                        singleLine = true,
+                        label = { Text("اسم الحصة", fontFamily = ScheduleFont) },
+                        placeholder = { Text("مثال: رياضيات", fontFamily = ScheduleFont) },
+                    )
+                    OutlinedTextField(
+                        value = editNote,
+                        onValueChange = { if (it.length <= 200) editNote = it },
+                        minLines = 2,
+                        maxLines = 4,
+                        label = { Text("ملاحظة الحصة", fontFamily = ScheduleFont) },
+                        placeholder = { Text("مثال: إحضار الكراس وحل الواجب", fontFamily = ScheduleFont) },
+                    )
+                    Text(
+                        "تُحفظ الملاحظة مع هذه الحصة وتظهر في «ملف الحصص والملاحظات».",
+                        color = Color(0xFF8D9DB1), fontFamily = ScheduleFont, fontSize = 11.sp,
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -258,6 +334,11 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
                         if (d != day) row else row.mapIndexed { p, value -> if (p == period) clean else value }
                     }
                     subjects = updated
+                    val cleanNote = editNote.trim().take(200)
+                    TimetablePreferences.saveNote(preferences, day, period, cleanNote)
+                    notes = notes.mapIndexed { d, row ->
+                        if (d != day) row else row.mapIndexed { p, value -> if (p == period) cleanNote else value }
+                    }
                     if (currentDay == day) TimetablePreferences.clearCompletion(preferences, dateKey, day, period)
                     completionRevision++
                     editCell = null
@@ -287,8 +368,17 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(subject, color = ScheduleCyan, fontFamily = ScheduleFont, fontWeight = FontWeight.Bold)
+                    if (notes[day][period].isNotBlank()) {
+                        Text("ملاحظة: ${notes[day][period]}", color = ScheduleGold, fontFamily = ScheduleFont, fontSize = 12.sp)
+                    }
                     Text("هل درست هذه الحصة؟", color = Color(0xFFD5DFEA), fontFamily = ScheduleFont)
                     if (existing != null) Text("يمكنك تغيير اختيارك.", color = Color(0xFF8D9DB1), fontFamily = ScheduleFont, fontSize = 12.sp)
+                    TextButton(onClick = {
+                        completionCell = null
+                        editSubject = subject
+                        editNote = notes[day][period]
+                        editCell = day to period
+                    }) { Text("تعديل اسم الحصة أو ملاحظتها", color = ScheduleCyan, fontFamily = ScheduleFont, fontSize = 12.sp) }
                 }
             },
             confirmButton = {
@@ -327,6 +417,15 @@ fun TimetableScreen(onLibrary: () -> Unit, onStudyResources: () -> Unit, onDevic
             },
         )
     }
+
+    if (recordsOpen) {
+        LessonFileDialog(
+            preferences = preferences,
+            subjects = subjects,
+            notes = notes,
+            onDismiss = { recordsOpen = false },
+        )
+    }
 }
 
 @Composable
@@ -339,6 +438,9 @@ private fun ScheduleHeader(
     detailsPeriod: Int,
     activePeriod: Int?,
     onSettings: () -> Unit,
+    thursdayEnabled: Boolean,
+    onThursdayChange: (Boolean) -> Unit,
+    onOpenRecords: () -> Unit,
 ) {
     Box(Modifier.fillMaxWidth().height(146.dp)) {
         ImageLogo(Modifier.align(Alignment.TopStart).padding(top = 11.dp, start = 14.dp))
@@ -358,17 +460,32 @@ private fun ScheduleHeader(
                         if (activePeriod == detailsPeriod) "الحصة الجارية الآن" else "بيانات الحصة ${PeriodNames[detailsPeriod]}",
                         color = Color.White, fontFamily = ScheduleFont, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp,
                     )
-                    Text("تبدأ: ${BellSchedule.formatClock(window.startMinute)}", color = Color(0xFFD5DFEA), fontFamily = ScheduleFont, fontSize = 13.sp)
+                    Text("تبدأ: ${formatClock12(window.startMinute)}", color = Color(0xFFD5DFEA), fontFamily = ScheduleFont, fontSize = 13.sp)
                     Text("مدة الحصة: ${schedule.lessonMinutes.arabicDigits()} دقيقة", color = Color(0xFFD5DFEA), fontFamily = ScheduleFont, fontSize = 13.sp)
-                    Text("تنتهي: ${BellSchedule.formatClock(window.endMinute)}", color = ScheduleGold, fontFamily = ScheduleFont, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("تنتهي: ${formatClock12(window.endMinute)}", color = ScheduleGold, fontFamily = ScheduleFont, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Text(
-                        window.nextStartMinute?.let { "الحصة التالية تبدأ: ${BellSchedule.formatClock(it)}" } ?: "هذه آخر حصة في اليوم",
+                        window.nextStartMinute?.let { "الحصة التالية تبدأ: ${formatClock12(it)}" } ?: "هذه آخر حصة في اليوم",
                         color = ScheduleCyan, fontFamily = ScheduleFont, fontSize = 12.sp,
                     )
                     TextButton(onClick = onSettings) {
                         Icon(Icons.Filled.Schedule, contentDescription = null, tint = ScheduleCyan, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(7.dp))
                         Text("تعديل أوقات الدوام", color = ScheduleCyan, fontFamily = ScheduleFont)
+                    }
+                    TextButton(onClick = onOpenRecords) {
+                        Icon(Icons.Filled.Description, contentDescription = null, tint = ScheduleCyan, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text("ملف الحصص والملاحظات", color = ScheduleCyan, fontFamily = ScheduleFont)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("دوام يوم الخميس", color = Color.White, fontFamily = ScheduleFont, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(
+                                if (thursdayEnabled) "الخميس ظاهر في الجدول" else "الأربعاء هو آخر يوم دراسي",
+                                color = Color(0xFF8D9DB1), fontFamily = ScheduleFont, fontSize = 11.sp,
+                            )
+                        }
+                        Switch(checked = thursdayEnabled, onCheckedChange = onThursdayChange)
                     }
                 }
             }
@@ -425,6 +542,7 @@ private fun ScheduleDayRow(
     day: Int,
     label: String,
     subjects: List<String>,
+    notes: List<String>,
     currentDay: Boolean,
     activePeriod: Int?,
     minuteNow: Int,
@@ -492,6 +610,10 @@ private fun ScheduleDayRow(
                     if (statusText.isNotEmpty()) {
                         Text(statusText, color = outline, fontFamily = ScheduleFont, fontWeight = FontWeight.Bold, fontSize = 7.sp, maxLines = 1, textAlign = TextAlign.Center)
                     }
+                    if (subject.isNotBlank() && notes[period].isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Box(Modifier.size(5.dp).clip(CircleShape).background(ScheduleGold))
+                    }
                 }
             }
         }
@@ -511,7 +633,7 @@ private fun BellScheduleDialog(initial: BellSchedule, onDismiss: () -> Unit, onS
         title = { Text("أوقات الحصص", color = Color.White, fontFamily = ScheduleFont, fontWeight = FontWeight.ExtraBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(startText, { startText = it.take(5); invalid = false }, label = { Text("بداية الحصة الأولى · ساعة:دقيقة", fontFamily = ScheduleFont) }, singleLine = true, keyboardOptions = KeyboardOptions.Default)
+                OutlinedTextField(startText, { startText = it.take(5); invalid = false }, label = { Text("بداية الحصة الأولى · ساعة:دقيقة (إدخال 24 ساعة)", fontFamily = ScheduleFont) }, singleLine = true, keyboardOptions = KeyboardOptions.Default)
                 OutlinedTextField(lessonText, { lessonText = it.filter(Char::isDigit).take(3); invalid = false }, label = { Text("مدة الحصة بالدقائق", fontFamily = ScheduleFont) }, singleLine = true, keyboardOptions = KeyboardOptions.Default)
                 OutlinedTextField(passingText, { passingText = it.filter(Char::isDigit).take(3); invalid = false }, label = { Text("الاستراحة بين الحصص بالدقائق", fontFamily = ScheduleFont) }, singleLine = true, keyboardOptions = KeyboardOptions.Default)
                 if (invalid) Text("تحقق من الساعة ومن مدة الحصة والاستراحة.", color = ScheduleRose, fontFamily = ScheduleFont, fontSize = 12.sp)
@@ -533,6 +655,86 @@ private fun BellScheduleDialog(initial: BellSchedule, onDismiss: () -> Unit, onS
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء", color = Color(0xFFB7C3D2), fontFamily = ScheduleFont) } },
     )
+}
+
+/** The saved lesson file: per-lesson notes plus the daily studied/missed history, newest first. */
+@Composable
+private fun LessonFileDialog(
+    preferences: SharedPreferences,
+    subjects: List<List<String>>,
+    notes: List<List<String>>,
+    onDismiss: () -> Unit,
+) {
+    val history = remember(preferences) { TimetablePreferences.history(preferences) }
+    val notedLessons = remember(notes) {
+        Weekdays.indices.flatMap { day ->
+            (0 until BellSchedule.PERIOD_COUNT).mapNotNull { period ->
+                notes[day][period].takeIf(String::isNotBlank)?.let { Triple(day, period, it) }
+            }
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF13233A),
+        icon = { Icon(Icons.Filled.Description, contentDescription = null, tint = ScheduleCyan) },
+        title = { Text("ملف الحصص والملاحظات", color = Color.White, fontFamily = ScheduleFont, fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                if (notedLessons.isEmpty() && history.isEmpty()) {
+                    Text(
+                        "لا توجد ملاحظات أو سجلات محفوظة بعد. اضغط على أي حصة في الجدول لكتابة اسمها وملاحظتها، وسيُحفظ سجل «درستها / لم أدرسها» هنا يومًا بعد يوم.",
+                        color = Color(0xFFD5DFEA), fontFamily = ScheduleFont, fontSize = 13.sp, lineHeight = 19.sp,
+                    )
+                }
+                if (notedLessons.isNotEmpty()) {
+                    Text("ملاحظات الحصص", color = ScheduleCyan, fontFamily = ScheduleFont, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                    notedLessons.forEach { (day, period, note) ->
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                "${Weekdays[day]} · الحصة ${PeriodNames[period]}${subjects[day][period].takeIf(String::isNotBlank)?.let { " — $it" } ?: ""}",
+                                color = Color.White, fontFamily = ScheduleFont, fontWeight = FontWeight.Bold, fontSize = 12.sp,
+                            )
+                            Text(note, color = Color(0xFFAFBED0), fontFamily = ScheduleFont, fontSize = 12.sp, lineHeight = 17.sp)
+                        }
+                    }
+                }
+                if (history.isNotEmpty()) {
+                    Text("سجل الحصص اليومية", color = ScheduleCyan, fontFamily = ScheduleFont, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                    history.forEach { dayHistory ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(historyDateLabel(dayHistory.dateKey), color = ScheduleGold, fontFamily = ScheduleFont, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            dayHistory.entries.forEach { entry ->
+                                val studied = entry.status == "studied"
+                                Text(
+                                    "${Weekdays[entry.day]} · الحصة ${PeriodNames[entry.period]}${subjects[entry.day][entry.period].takeIf(String::isNotBlank)?.let { " — $it" } ?: ""}: ${if (studied) "درستها" else "لم أدرسها"}",
+                                    color = if (studied) ScheduleGreen else ScheduleRose,
+                                    fontFamily = ScheduleFont, fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("إغلاق", color = ScheduleCyan, fontFamily = ScheduleFont) } },
+    )
+}
+
+private fun historyDateLabel(dateKey: String): String {
+    val parsed = runCatching { SimpleDateFormat("yyyyMMdd", Locale.US).parse(dateKey) }.getOrNull() ?: return dateKey
+    return SimpleDateFormat("EEEE، d MMMM yyyy", Locale.forLanguageTag("ar-YE")).format(parsed)
+}
+
+/** 12-hour clock face (07:05 ص / 01:05 م) for display only; minutes stay 24-hour inside. */
+private fun formatClock12(minuteOfDay: Int): String {
+    val normalized = ((minuteOfDay % 1440) + 1440) % 1440
+    val hour24 = normalized / 60
+    val hour12 = if (hour24 % 12 == 0) 12 else hour24 % 12
+    val marker = if (hour24 < 12) "ص" else "م"
+    return "%02d:%02d %s".format(Locale.US, hour12, normalized % 60, marker)
 }
 
 private fun Int.arabicDigits(): String = toString().map { ('٠'.code + it.digitToInt()).toChar() }.joinToString("")

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
+import com.shadowbooks.data.StudyMaterialKind
 
 private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader }
 
@@ -30,6 +31,8 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     var readerDescription by rememberSaveable { mutableStateOf("") }
     var readerContentUri by rememberSaveable { mutableStateOf("") }
     var readerFromResources by rememberSaveable { mutableStateOf(false) }
+    // Kept at the root (never leaves composition) so returning from the reader restores the same tab.
+    var studyKind by rememberSaveable { mutableStateOf(StudyMaterialKind.Exam) }
     var readerFromDevicePdfs by rememberSaveable { mutableStateOf(false) }
     val libraryScroll = rememberLazyListState()
     val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
@@ -91,6 +94,8 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                 onDevicePdfs = { destination = AppDestination.DevicePdfs },
             )
             AppDestination.StudyResources -> StudyResourcesScreen(
+                kind = studyKind,
+                onKindChange = { studyKind = it },
                 onLibrary = { destination = AppDestination.Library },
                 onTimetable = { destination = AppDestination.Timetable },
                 onDevicePdfs = { destination = AppDestination.DevicePdfs },

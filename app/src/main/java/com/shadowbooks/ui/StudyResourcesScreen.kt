@@ -36,7 +36,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +74,8 @@ private data class StudyResourceCategory(
 
 @Composable
 fun StudyResourcesScreen(
+    kind: StudyMaterialKind,
+    onKindChange: (StudyMaterialKind) -> Unit,
     onLibrary: () -> Unit,
     onTimetable: () -> Unit,
     onDevicePdfs: () -> Unit,
@@ -96,51 +97,50 @@ fun StudyResourcesScreen(
             (files + listOfNotNull(group)).groupBy(StudyMaterialFile::bookNumber)
         }
     }
-    var selectedKind by rememberSaveable { mutableStateOf(StudyMaterialKind.Exam.name) }
-    val kind = StudyMaterialKind.values().firstOrNull { it.name == selectedKind } ?: StudyMaterialKind.Exam
+    // The selected tab is hoisted to the app root: this screen leaves the composition while the
+    // reader is open, so tab state kept here would reset to Exams on return.
     val bySubject = materials[kind].orEmpty()
     val visibleSubjects = remember(kind, bySubject) {
-        if (kind == StudyMaterialKind.Exam) {
-            val quranBook = BookCatalog.books.first { it.number == 1 }
-            listOf(
-                StudyResourceCategory(
-                    number = StudyMaterialCatalog.GENERAL_ISLAMIC_NUMBER,
-                    title = "الإسلامية",
-                    files = StudyMaterialCatalog.islamicGroupFiles(bySubject),
-                ),
-                StudyResourceCategory(
-                    number = quranBook.number,
-                    title = quranBook.title,
-                    files = bySubject[quranBook.number].orEmpty(),
-                ),
-                StudyResourceCategory(
-                    number = 6,
-                    title = "اللغة العربية",
-                    files = StudyMaterialCatalog.arabicGroupFiles(bySubject),
-                ),
-            ) + BookCatalog.books
-                .filterNot {
-                    it.number == quranBook.number ||
-                        StudyMaterialCatalog.isIslamicBook(it.number) ||
-                        StudyMaterialCatalog.isArabicBook(it.number)
-                }
-                .map { book -> StudyResourceCategory(book.number, book.title, bySubject[book.number].orEmpty()) } +
-                listOf(
-                    StudyResourceCategory(
-                        number = StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER,
-                        title = "كيف تستفيد من النماذج الوزارية؟",
-                        files = bySubject[StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER].orEmpty(),
-                    ),
-                    StudyResourceCategory(
-                        number = StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER,
-                        title = "الفرق بين النموذج وبنك الأسئلة",
-                        files = bySubject[StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER].orEmpty(),
-                    ),
-                )
-        } else {
-            BookCatalog.books.map { book ->
+        // One display order for both tabs: Quran, Islamic, Arabic, Chemistry, Biology,
+        // Mathematics, Physics, English, then (for exams) the two advisory guides.
+        val quranBook = BookCatalog.books.first { it.number == 1 }
+        fun single(number: Int): StudyResourceCategory? =
+            BookCatalog.books.firstOrNull { it.number == number }?.let { book ->
                 StudyResourceCategory(book.number, book.title, bySubject[book.number].orEmpty())
             }
+        val grouped = listOf(
+            StudyResourceCategory(
+                number = quranBook.number,
+                title = quranBook.title,
+                files = bySubject[quranBook.number].orEmpty(),
+            ),
+            StudyResourceCategory(
+                number = StudyMaterialCatalog.GENERAL_ISLAMIC_NUMBER,
+                title = "الإسلامية",
+                files = StudyMaterialCatalog.islamicGroupFiles(bySubject),
+            ),
+            StudyResourceCategory(
+                number = 6,
+                title = "اللغة العربية",
+                files = StudyMaterialCatalog.arabicGroupFiles(bySubject),
+            ),
+        )
+        val orderedSingles = listOf(9, 11, 12, 10, 13).mapNotNull { number -> single(number) }
+        if (kind == StudyMaterialKind.Exam) {
+            grouped + orderedSingles + listOf(
+                StudyResourceCategory(
+                    number = StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER,
+                    title = "كيف تستفيد من النماذج الوزارية؟",
+                    files = bySubject[StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER].orEmpty(),
+                ),
+                StudyResourceCategory(
+                    number = StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER,
+                    title = "الفرق بين النموذج وبنك الأسئلة",
+                    files = bySubject[StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER].orEmpty(),
+                ),
+            )
+        } else {
+            grouped + orderedSingles
         }
     }
     var chooseForCategory by remember { mutableStateOf<StudyResourceCategory?>(null) }
@@ -183,7 +183,7 @@ fun StudyResourcesScreen(
                         modifier = Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(16.dp))
                             .background(if (selected) Color(0xFF123E59) else Color(0xFF101E32))
                             .border(1.dp, if (selected) StudyCyan.copy(alpha = .8f) else Color(0xFF30445D), RoundedCornerShape(16.dp))
-                            .clickable(role = Role.Button, onClick = { selectedKind = option.name })
+                            .clickable(role = Role.Button, onClick = { onKindChange(option) })
                             .padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
