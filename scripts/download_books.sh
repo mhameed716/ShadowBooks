@@ -320,6 +320,68 @@ for entry in "${CHEMISTRY_EXAMS[@]}"; do
   mv "$temporary" "$target"
 done
 
+# Biology exam PDFs (internal 11- prefix, hidden in the UI) shown in the Biology exams card.
+BIOLOGY_EXAMS=(
+  '11-31_نموذج_وزاري_للأحياء_من_نماذج_أوائل_الجمهورية2025_2026.pdf|1aKa49evxLaug64IqhDWvK8kKwv3JJeP2'
+  '11-بنك_اسئله_3.pdf|1JgwtQIlUQ7IEmMhX08edgLcCfB8h3kVT'
+  '11-بنك_اسئله_2.pdf|15hjHDRQ6W8wWArzzwv11VkQDuwY6fTRg'
+  '11-بنك_اسئله_1.pdf|1OG0SAfWkQ8sAnL6ymtidK7p-6AHQeuzf'
+)
+for entry in "${BIOLOGY_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading Biology exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
+# Quran summary PDFs (internal 01- prefix, hidden in the UI) shown in the Quran summaries card.
+# These are direct download links rather than Google Drive IDs, so the full URL is stored.
+QURAN_SUMMARIES_DIR="$BOOKS_DIR/study/summaries"
+mkdir -p "$QURAN_SUMMARIES_DIR"
+QURAN_SUMMARIES=(
+  '01-ملخص_في_سورة_النور_(الطبعة_الجديدة).pdf|https://s1.yemen-books.com/app/download.php?book=206&token=e85d1d8001128b70afba112f965af38df6b1dc748c349442'
+  '01-البيان_في_التفسير_وعلوم_القرآن.pdf|https://s1.yemen-books.com/app/download.php?book=196&token=f406f24409599fd42d8f350196dcbecd0be675a359d06d34'
+  '01-ملزمة_المختصر_المفيد_لبعض_أحكام_التجويد.pdf|https://s1.yemen-books.com/app/download.php?book=202&token=ddc1953d8b201b522f98c7b3d568cb98cd7b0bd272d89228'
+)
+for entry in "${QURAN_SUMMARIES[@]}"; do
+  filename="${entry%%|*}"
+  file_url="${entry#*|}"
+  target="$QURAN_SUMMARIES_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading Quran summary $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "$file_url" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
 pdf_count="$(find "$BOOKS_DIR" -maxdepth 1 -type f -name '*.pdf' | wc -l | tr -d ' ')"
 if [[ "$pdf_count" != "15" ]]; then
   echo "ERROR: expected 15 PDF files in $BOOKS_DIR, found $pdf_count." >&2
