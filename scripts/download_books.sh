@@ -262,6 +262,35 @@ for entry in "${MATH_EXAMS[@]}"; do
   mv "$temporary" "$target"
 done
 
+# English exam PDFs (internal 13- prefix, hidden in the UI) shown beside the first file in the English exams card.
+ENGLISH_EXAMS=(
+  '13-31_نموذج_وزاري_للانجليزي_من_نماذج_أوائل_الجمهورية2025_2026.pdf|1KQxwEJmCCVizLEvYxGAWukDm-OYf4Xd9'
+  '13-بنك_اسئله_3.pdf|1C4BgOwyA7hKXb5P5YMNRor6EzV_N0qrT'
+  '13-بنك_اسئله_2.pdf|1tUHUcSgK_uj1udTxFWHC3SdIQeihDXbn'
+)
+for entry in "${ENGLISH_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading English exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
 pdf_count="$(find "$BOOKS_DIR" -maxdepth 1 -type f -name '*.pdf' | wc -l | tr -d ' ')"
 if [[ "$pdf_count" != "15" ]]; then
   echo "ERROR: expected 15 PDF files in $BOOKS_DIR, found $pdf_count." >&2
