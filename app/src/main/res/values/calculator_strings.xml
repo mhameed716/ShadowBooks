@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calc_name" translatable="false">Casio Business</string>
+    <string name="calc_detail">تخطيط الأزرار · حاسبة داخلية مستقلة</string>
+    <string name="calc_header">تخطيط Casio Business</string>
+    <string name="calc_fold">طيّ الحاسبة</string>
+    <string name="calc_resize">الفاصل بين الكتاب والحاسبة</string>
+    <string name="calc_grow">تكبير مساحة الحاسبة</string>
+    <string name="calc_shrink">تكبير مساحة الكتاب</string>
+    <string name="calc_modes">أوضاع الحاسبة</string>
+    <string name="calc_modes_hint">اختر أداة للعمل تحت صفحة الكتاب. يمكنك الرجوع إلى لوحة الأزرار دون فقد عمليتك.</string>
+    <string name="calc_keypad">لوحة الأزرار</string>
+    <string name="calc_run">احسب</string>
+    <string name="calc_draw">ارسم المنحنيات</string>
+    <string name="calc_busy">جارٍ الحساب…</string>
+    <string name="calc_find_task">ابحث بالاسم أو الرمز أو الرقم</string>
+    <string name="calc_no_match">لا توجد عملية مطابقة.</string>
+    <string name="calc_field_limit">يتّسع الحقل حتى ١٠٢٤ محرفًا؛ اختصر الإدخال.</string>
+    <string name="calc_use_answer">استخدام الناتج في لوحة الأزرار (Ans)</string>
+    <string name="calc_reuse">نقل الناتج إلى الحقل الأول</string>
+    <string name="calc_plot_description">رسم المنحنيات: %1$s</string>
+    <string name="calc_unit">وحدة الزوايا</string>
+    <string name="calc_degrees">درجات (DEG)</string>
+    <string name="calc_radians">راديان (RAD)</string>
+    <string name="calc_grads">غراد (GRAD)</string>
+    <string name="calc_tools">الدوال والرموز الإضافية</string>
+    <string name="calc_tools_hint">زر القوس الأيمن يحمل فاصلة بالأصفر وx بالأحمر: اضغط SHIFT ثم القوس الأيمن للفاصلة، أو ALPHA ثم القوس الأيمن للمتغيّر. التكامل والتفاضل وحلّ الجذر تقريبية.</string>
+    <string name="calc_help">دليل أزرار الحاسبة</string>
+    <string name="calc_key_help">الكتابة داخل الزر هي وظيفته الأساسية. للأصفر اضغط SHIFT، وللأحمر اضغط ALPHA، ثم اضغط الزر الذي يحمل الرمز.\n\nلإدخال كسر، اضغط زر الكسر واكتب البسط، ثم اضغط السهم الأيمن واكتب المقام. زر الدرجات والدقائق والثواني يتيح إدخال ثلاث خانات بالطريقة نفسها.\n\nللمجموع أو الجداء اضغط SHIFT أو ALPHA ثم زر اللوغاريتم ذي الأساس. أدخل الدالة بالنسبة إلى X ثم الحدّين مفصولين بفواصل.\n\nللمعادلة أدخل علامة المساواة الحمراء ثم اختر SOLVE. النقطتان فوق زر التكامل تفصلان عمليات حقيقية متتابعة؛ اضغط يساوي لعرض كل ناتج.\n\nمن صف الأرقام: MATRIX للمصفوفات، وCONST للثوابت، وHistory لاسترجاع عملية. لا تُقرأ الحافظة إلا إذا ضغطت PASTE.</string>
+    <string name="calc_history">سجلّ العمليات</string>
+    <string name="calc_empty_history">لا توجد عمليات محفوظة بعد.</string>
+    <string name="calc_clear_vars">تصفير المتغيّرات</string>
+    <string name="calc_clear_vars_hint">هل تريد تصفير ذاكرة A–F وX وY وM؟ يبقى الناتج وسجلّ العمليات دون تغيير.</string>
+    <string name="calc_templates" translatable="false">int(X^2,0,1)\ndiff(X^2,3)\nsolve(X^2−2,1)\nroot(3,8)  ·  logb(2,8)</string>
+    <string name="calc_hyperbolic">الدوال الزائدية</string>
+    <string name="calc_recall">اختر متغيّرًا لإدراجه</string>
+    <string name="calc_store">حفظ قيمة العملية في متغيّر</string>
+    <string name="calc_key_fraction">كسر: بسط ومقام</string>
+    <string name="calc_key_root">جذر تربيعي</string>
+    <string name="calc_key_power">رفع إلى أسّ</string>
+    <string name="calc_input">العملية الحسابية</string>
+    <string name="calc_output">الناتج</string>
+    <string name="calc_syntax">تحقّق من العملية والأقواس وعدد المعاملات.</string>
+    <string name="calc_zero">لا يمكن القسمة على صفر.</string>
+    <string name="calc_domain">العملية خارج مجال الأعداد الحقيقية أو مدى الحاسبة.</string>
+    <string name="calc_limit">تعذّر إكمال الحساب ضمن حدود الدقّة أو طول العملية.</string>
+</resources>

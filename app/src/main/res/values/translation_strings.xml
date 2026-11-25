@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translate_button">ترجمة</string>
+    <string name="translate_original">عرض الأصل</string>
+    <string name="translate_show_arabic">عرض الترجمة العربية للصفحة %1$s</string>
+    <string name="translate_show_english">عرض الأصل الإنجليزي للصفحة %1$s</string>
+</resources>

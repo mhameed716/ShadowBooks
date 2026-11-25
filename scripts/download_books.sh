@@ -5,7 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BOOKS_DIR="$ROOT_DIR/app/src/main/assets/books"
 mkdir -p "$BOOKS_DIR"
 
-# filename|public Google Drive file id
+# All fifteen textbook PDFs: filename|public Google Drive file id.
+# Existing valid PDFs are reused; the English pupil edition is checked against its prepared Arabic pages below.
 BOOKS=(
   'quran-and-its-sciences.pdf|1-rZkVdr_L1Hic3O2ReeWXePQxQ_yo0vl'
   'faith-and-purification.pdf|1OxZJHGBx2LKIPBkp0N-oxyVDLfBBCS75'
@@ -28,20 +29,142 @@ for entry in "${BOOKS[@]}"; do
   filename="${entry%%|*}"
   file_id="${entry#*|}"
   target="$BOOKS_DIR/$filename"
-  temporary="$target.part"
+  temporary="$target.$$.part"
 
-  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
-    echo "Already present: $filename"
-    continue
+  if [[ -e "$target" ]]; then
+    if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+      echo "Already present: $filename"
+      continue
+    fi
+    echo "ERROR: refusing to replace an existing file that is not a valid PDF: $target" >&2
+    exit 1
+  fi
+  if [[ -e "$temporary" ]]; then
+    echo "ERROR: refusing to overwrite an existing partial download: $temporary" >&2
+    exit 1
   fi
 
-  rm -f "$target" "$temporary"
   echo "Downloading $filename ..."
   curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
     --connect-timeout 30 --max-time 900 \
     "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
     --output "$temporary"
 
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access). Kept $temporary for inspection." >&2
+    exit 1
+  fi
+  if [[ -e "$target" ]] || ! mv -n -- "$temporary" "$target" || [[ -e "$temporary" ]]; then
+    echo "ERROR: refusing to overwrite a file that appeared during download: $target" >&2
+    exit 1
+  fi
+done
+
+# Download study PDFs into app/build (ignored by Git/snapshots), where full variants package them as assets.
+python3 "$ROOT_DIR/scripts/download_study_assets.py"
+
+# Refuse to package a different English pupil edition than the one paired with the Arabic pages.
+python3 "$ROOT_DIR/scripts/verify_prepared_book.py"
+
+# Bundle Surah An-Nur for the Quran reader in full builds. Keep it beside the downloaded books;
+# the Gradle source sets deliberately omit app/src/main/assets from the lightweight trial APK.
+AUDIO_DIR="$BOOKS_DIR/quran-audio"
+AUDIO_NAME='an-nur-abdul-basit-r1.mp3'
+AUDIO_URL='https://cdn.mp3quran.net/audio/abdulbasit-abdulsamad/r1/024.mp3'
+AUDIO_TARGET="$AUDIO_DIR/$AUDIO_NAME"
+AUDIO_TEMP="$AUDIO_TARGET.$$.part"
+mkdir -p "$AUDIO_DIR"
+
+audio_is_valid() {
+  python3 - "$1" <<'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+if not path.is_file() or path.stat().st_size <= 1024:
+    raise SystemExit(1)
+with path.open('rb') as audio:
+    header = audio.read(3)
+is_mp3 = header == b'ID3' or (len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0)
+raise SystemExit(0 if is_mp3 else 1)
+PY
+}
+
+if [[ -e "$AUDIO_TARGET" ]]; then
+  if audio_is_valid "$AUDIO_TARGET"; then
+    echo "Already present: Quran audio $AUDIO_NAME"
+  else
+    echo "ERROR: refusing to replace an existing file that is not valid MP3 audio: $AUDIO_TARGET" >&2
+    exit 1
+  fi
+else
+  if [[ -e "$AUDIO_TEMP" ]]; then
+    echo "ERROR: refusing to overwrite an existing partial download: $AUDIO_TEMP" >&2
+    exit 1
+  fi
+  echo "Downloading Quran audio $AUDIO_NAME ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 1800 \
+    "$AUDIO_URL" \
+    --output "$AUDIO_TEMP"
+  if ! audio_is_valid "$AUDIO_TEMP"; then
+    echo "ERROR: Quran audio did not download as a valid MP3. Kept $AUDIO_TEMP for inspection." >&2
+    exit 1
+  fi
+  if [[ -e "$AUDIO_TARGET" ]] || ! mv -n -- "$AUDIO_TEMP" "$AUDIO_TARGET" || [[ -e "$AUDIO_TEMP" ]]; then
+    echo "ERROR: refusing to overwrite a file that appeared during download: $AUDIO_TARGET" >&2
+    exit 1
+  fi
+fi
+
+# Bundle the second Surah An-Nur recitation (Islam Sobhi) beside Abdul Basit for the full build.
+SOBHI_NAME='an-nur-islam-sobhi.mp3'
+SOBHI_URL='https://media.way2quran.com/islam-sobhi/hafs-an-asim/24.mp3'
+SOBHI_TARGET="$AUDIO_DIR/$SOBHI_NAME"
+SOBHI_TEMP="$SOBHI_TARGET.$$.part"
+if [[ -e "$SOBHI_TARGET" ]]; then
+  if audio_is_valid "$SOBHI_TARGET"; then
+    echo "Already present: Quran audio $SOBHI_NAME"
+  else
+    echo "ERROR: refusing to replace an existing file that is not valid MP3 audio: $SOBHI_TARGET" >&2
+    exit 1
+  fi
+else
+  echo "Downloading Quran audio $SOBHI_NAME ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 1800 \
+    "$SOBHI_URL" \
+    --output "$SOBHI_TEMP"
+  if ! audio_is_valid "$SOBHI_TEMP"; then
+    echo "ERROR: Quran audio did not download as a valid MP3. Kept $SOBHI_TEMP for inspection." >&2
+    exit 1
+  fi
+  mv -n -- "$SOBHI_TEMP" "$SOBHI_TARGET"
+fi
+
+# Arabic-language exam PDFs (internal 06- prefix, hidden in the UI) for the merged Arabic exams card.
+ARABIC_EXAMS_DIR="$BOOKS_DIR/study/exams"
+mkdir -p "$ARABIC_EXAMS_DIR"
+ARABIC_EXAMS=(
+  '06-بنك_اسئله_1.pdf|1KhlrIAp1KlZAol9aBww6haSvM1M15A4_'
+  '06-بنك_اسئله_2026.pdf|1dN4SlhYGXvLeHyNs3IDfHb33vU0f3Oz8'
+  '06-31_نموذج_وزاري_للغة_العربيةمن_نماذج_أوائل_الجمهورية2025_2026.pdf|1G5Fi-0wuqjY-4NFq3Tffh95dRWkNyfqS'
+  '06-نماذج_2025.pdf|1qsaq5Odrkr-0XrhtZD3trnxm8jyQ9a0l'
+  '06-نماذج_2024.pdf|1gpajh886kNpLNz1lg0qLeI-8lS6w8Sss'
+)
+for entry in "${ARABIC_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading Arabic exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
   if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
     echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
     rm -f "$temporary"
@@ -56,4 +179,4 @@ if [[ "$pdf_count" != "15" ]]; then
   exit 1
 fi
 
-echo "All 15 PDF files are ready in $BOOKS_DIR."
+echo "All 15 textbooks, 20 generated study PDFs, the reviewed PDF, both Quran recitations, and the Arabic exam PDFs are ready for the full build."
