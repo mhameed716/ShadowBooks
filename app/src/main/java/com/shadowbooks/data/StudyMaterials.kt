@@ -57,9 +57,31 @@ object StudyMaterialCatalog {
             .values.flatten()
             .sortedWith(compareBy(StudyMaterialFile::bookNumber, StudyMaterialFile::title))
 
+    /** Advisory guide cards shown beside the subject exam cards; each holds a single file matched by its exact name (no numeric prefix). */
+    const val MINISTRY_MODELS_GUIDE_NUMBER = 14
+    const val MODEL_VS_QUESTION_BANK_NUMBER = 15
+    const val MINISTRY_MODELS_GUIDE_FILE = "كيف_تستفيد_من_النماذج_الوزارية.pdf"
+    const val MODEL_VS_QUESTION_BANK_FILE = "الفرق_بين_النموذج_وبنك_الأسئلة.pdf"
+    private val guideFileNumbers = mapOf(
+        MINISTRY_MODELS_GUIDE_FILE to MINISTRY_MODELS_GUIDE_NUMBER,
+        MODEL_VS_QUESTION_BANK_FILE to MODEL_VS_QUESTION_BANK_NUMBER,
+    )
+
+    fun isGuideBook(number: Int): Boolean = number in guideFileNumbers.values
+
     /** Prefix 00 is a shared Islamic-education resource; other prefixes must match the catalogue. */
     fun fromAssetNames(kind: StudyMaterialKind, fileNames: List<String>): List<StudyMaterialFile> =
         fileNames.mapNotNull { name ->
+            // Guide files are matched by their exact names, with no numeric prefix in the name.
+            val guideNumber = if (kind == StudyMaterialKind.Exam) guideFileNumbers[name] else null
+            if (guideNumber != null) {
+                return@mapNotNull StudyMaterialFile(
+                    guideNumber,
+                    kind,
+                    "$ROOT/${kind.folder}/$name",
+                    name.substringBeforeLast('.').replace('_', ' '),
+                )
+            }
             val match = numberedPdf.matchEntire(name) ?: return@mapNotNull null
             val number = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
             if (number == GENERAL_ISLAMIC_NUMBER && kind != StudyMaterialKind.Exam) return@mapNotNull null
