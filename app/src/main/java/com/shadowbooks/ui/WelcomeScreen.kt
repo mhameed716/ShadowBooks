@@ -107,6 +107,14 @@ fun WelcomeScreen(onEnter: () -> Unit) {
                     fontSize = 15.sp,
                     textAlign = TextAlign.Center,
                 )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "مشروع تخرج: الدفعه التي لن تُنسئ....",
+                    color = Color(0xFFFFC86B),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
                 Spacer(Modifier.height(24.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
