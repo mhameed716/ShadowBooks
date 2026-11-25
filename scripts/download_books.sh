@@ -350,37 +350,11 @@ for entry in "${BIOLOGY_EXAMS[@]}"; do
   mv "$temporary" "$target"
 done
 
-# Quran summary PDFs (internal 01- prefix, hidden in the UI) shown in the Quran summaries card.
-# These are direct download links rather than Google Drive IDs, so the full URL is stored.
-QURAN_SUMMARIES_DIR="$BOOKS_DIR/study/summaries"
-mkdir -p "$QURAN_SUMMARIES_DIR"
-QURAN_SUMMARIES=(
-  '01-ملخص_في_سورة_النور_(الطبعة_الجديدة).pdf|https://s1.yemen-books.com/app/download.php?book=206&token=e85d1d8001128b70afba112f965af38df6b1dc748c349442'
-  '01-البيان_في_التفسير_وعلوم_القرآن.pdf|https://s1.yemen-books.com/app/download.php?book=196&token=f406f24409599fd42d8f350196dcbecd0be675a359d06d34'
-  '01-ملزمة_المختصر_المفيد_لبعض_أحكام_التجويد.pdf|https://s1.yemen-books.com/app/download.php?book=202&token=ddc1953d8b201b522f98c7b3d568cb98cd7b0bd272d89228'
-)
-for entry in "${QURAN_SUMMARIES[@]}"; do
-  filename="${entry%%|*}"
-  file_url="${entry#*|}"
-  target="$QURAN_SUMMARIES_DIR/$filename"
-  temporary="$target.part"
-  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
-    echo "Already present: $filename"
-    continue
-  fi
-  rm -f "$target" "$temporary"
-  echo "Downloading Quran summary $filename ..."
-  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
-    --connect-timeout 30 --max-time 900 \
-    "$file_url" \
-    --output "$temporary"
-  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
-    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
-    rm -f "$temporary"
-    exit 1
-  fi
-  mv "$temporary" "$target"
-done
+# Quran summary PDFs are no longer downloaded: the Yemen-books download links expired
+# (their tokens now redirect to the site home page instead of serving PDFs, which broke
+# every full build). The Quran summaries are supplied as checked-in files instead:
+# any 01-*.pdf placed under app/src/main/assets/books/study/summaries/ is packaged
+# automatically and appears in the Quran summaries card.
 
 pdf_count="$(find "$BOOKS_DIR" -maxdepth 1 -type f -name '*.pdf' | wc -l | tr -d ' ')"
 if [[ "$pdf_count" != "15" ]]; then
