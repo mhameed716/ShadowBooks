@@ -57,6 +57,22 @@ class StudyMaterialsTest {
         assertTrue(StudyMaterialCatalog.fromAssetNames(StudyMaterialKind.Summary, listOf("00-general-islamic-models.pdf")).isEmpty())
     }
 
+    @Test fun guideNumbersAreExamOnlyAndKeepTheirFiles() {
+        val exams = StudyMaterialCatalog.fromAssetNames(
+            StudyMaterialKind.Exam,
+            listOf("14-ministry-models-guide.pdf", "15-model-vs-question-bank.pdf", "16-unknown.pdf"),
+        )
+        assertEquals(listOf(14, 15), exams.map { it.bookNumber })
+        assertTrue(StudyMaterialCatalog.isGuideBook(14))
+        assertTrue(StudyMaterialCatalog.isGuideBook(15))
+        assertTrue(
+            StudyMaterialCatalog.fromAssetNames(
+                StudyMaterialKind.Summary,
+                listOf("14-ministry-models-guide.pdf"),
+            ).isEmpty(),
+        )
+    }
+
     @Test fun arabicGroupIncludesGrammarReadingAndLiteratureOnly() {
         val files = StudyMaterialCatalog.fromAssetNames(
             StudyMaterialKind.Exam,

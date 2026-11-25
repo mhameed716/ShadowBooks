@@ -124,7 +124,19 @@ fun StudyResourcesScreen(
                         StudyMaterialCatalog.isIslamicBook(it.number) ||
                         StudyMaterialCatalog.isArabicBook(it.number)
                 }
-                .map { book -> StudyResourceCategory(book.number, book.title, bySubject[book.number].orEmpty()) }
+                .map { book -> StudyResourceCategory(book.number, book.title, bySubject[book.number].orEmpty()) } +
+                listOf(
+                    StudyResourceCategory(
+                        number = StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER,
+                        title = "كيف تستفيد من النماذج الوزارية؟",
+                        files = bySubject[StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER].orEmpty(),
+                    ),
+                    StudyResourceCategory(
+                        number = StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER,
+                        title = "الفرق بين النموذج وبنك الأسئلة",
+                        files = bySubject[StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER].orEmpty(),
+                    ),
+                )
         } else {
             BookCatalog.books.map { book ->
                 StudyResourceCategory(book.number, book.title, bySubject[book.number].orEmpty())
