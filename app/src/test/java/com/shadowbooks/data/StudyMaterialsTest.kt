@@ -57,18 +57,29 @@ class StudyMaterialsTest {
         assertTrue(StudyMaterialCatalog.fromAssetNames(StudyMaterialKind.Summary, listOf("00-general-islamic-models.pdf")).isEmpty())
     }
 
-    @Test fun guideNumbersAreExamOnlyAndKeepTheirFiles() {
+    @Test fun guideFilesAreMatchedByExactNameWithoutNumericPrefix() {
         val exams = StudyMaterialCatalog.fromAssetNames(
             StudyMaterialKind.Exam,
-            listOf("14-ministry-models-guide.pdf", "15-model-vs-question-bank.pdf", "16-unknown.pdf"),
+            listOf(
+                StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_FILE,
+                StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_FILE,
+                "14-ministry-models-guide.pdf",
+            ),
         )
-        assertEquals(listOf(14, 15), exams.map { it.bookNumber })
-        assertTrue(StudyMaterialCatalog.isGuideBook(14))
-        assertTrue(StudyMaterialCatalog.isGuideBook(15))
+        assertEquals(
+            listOf(
+                StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER,
+                StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER,
+            ),
+            exams.map { it.bookNumber },
+        )
+        assertEquals("كيف تستفيد من النماذج الوزارية", exams.first().title)
+        assertEquals("الفرق بين النموذج وبنك الأسئلة", exams.last().title)
+        assertTrue(StudyMaterialCatalog.isGuideBook(StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER))
         assertTrue(
             StudyMaterialCatalog.fromAssetNames(
                 StudyMaterialKind.Summary,
-                listOf("14-ministry-models-guide.pdf"),
+                listOf(StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_FILE),
             ).isEmpty(),
         )
     }
