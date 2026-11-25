@@ -204,6 +204,122 @@ for entry in "${ISLAMIC_EXAMS[@]}"; do
   mv "$temporary" "$target"
 done
 
+# Physics exam PDFs (internal 10- prefix, hidden in the UI) shown beside the first file in the Physics exams card.
+PHYSICS_EXAMS=(
+  '10-بنك_اسئله_3.pdf|1r6ImQHiwGyCyuZluooyc1aPt4P71FCqJ'
+  '10-31_نموذج_وزاري_للفيزياء_من_نماذج_أوائل_الجمهورية2025_2026.pdf|1FhraZ1rw3OIM7EkUuR_OlgdvSr0LGkFq'
+  '10-بنك_اسئله_2.pdf|1djqQpA3VTOt62bfI684nCuUBNoPQm7pC'
+)
+for entry in "${PHYSICS_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading Physics exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
+# Mathematics exam PDFs (internal 12- prefix, hidden in the UI) shown beside the first file in the Mathematics exams card.
+MATH_EXAMS=(
+  '12-31_نموذج_وزاري_للتفاضل_والتكامل_من_نماذج_أوائل_الجمهورية2025_2026.pdf|1RdnM8EPGs72HQ4r7iIPjFVYG9IlDvNJ9'
+  '12-بنك_اسئله_5.pdf|1QlhO0BiyB1VIGL9Opwof8MYEkYAZ-Cwb'
+  '12-بنك_اسئله4.pdf|1MzZ9VDah75LLRWOoX9UcRrngHIhEFSkE'
+)
+for entry in "${MATH_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading Mathematics exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
+# English exam PDFs (internal 13- prefix, hidden in the UI) shown beside the first file in the English exams card.
+ENGLISH_EXAMS=(
+  '13-31_نموذج_وزاري_للانجليزي_من_نماذج_أوائل_الجمهورية2025_2026.pdf|1KQxwEJmCCVizLEvYxGAWukDm-OYf4Xd9'
+  '13-بنك_اسئله_3.pdf|1C4BgOwyA7hKXb5P5YMNRor6EzV_N0qrT'
+  '13-بنك_اسئله_2.pdf|1tUHUcSgK_uj1udTxFWHC3SdIQeihDXbn'
+)
+for entry in "${ENGLISH_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading English exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
+# Chemistry exam PDFs (internal 09- prefix, hidden in the UI) shown beside the first file in the Chemistry exams card.
+CHEMISTRY_EXAMS=(
+  '09-بنك_اسئله_1.pdf|1Nv_ZewuBDcq-jlllYNa9qlI9bFAZYNpT'
+  '09-بنك_اسئله_2.pdf|1Ht4vL-DB7-zYMaSfRYmZu7wlR9WO6yxW'
+  '09-بنك_اسئله_3.pdf|1SMcix50U5FxfkMmMS7y0FCW6Lgbj8vNC'
+)
+for entry in "${CHEMISTRY_EXAMS[@]}"; do
+  filename="${entry%%|*}"
+  file_id="${entry#*|}"
+  target="$ARABIC_EXAMS_DIR/$filename"
+  temporary="$target.part"
+  if [[ -s "$target" ]] && [[ "$(head -c 5 "$target" || true)" == '%PDF-' ]]; then
+    echo "Already present: $filename"
+    continue
+  fi
+  rm -f "$target" "$temporary"
+  echo "Downloading Chemistry exam $filename ..."
+  curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 900 \
+    "https://drive.usercontent.google.com/u/0/uc?id=${file_id}&export=download" \
+    --output "$temporary"
+  if [[ "$(head -c 5 "$temporary" || true)" != '%PDF-' ]]; then
+    echo "ERROR: $filename did not download as a PDF (the link may require access)." >&2
+    rm -f "$temporary"
+    exit 1
+  fi
+  mv "$temporary" "$target"
+done
+
 pdf_count="$(find "$BOOKS_DIR" -maxdepth 1 -type f -name '*.pdf' | wc -l | tr -d ' ')"
 if [[ "$pdf_count" != "15" ]]; then
   echo "ERROR: expected 15 PDF files in $BOOKS_DIR, found $pdf_count." >&2
