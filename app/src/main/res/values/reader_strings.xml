@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_back">رجوع</string>
+    <string name="reader_features">خيارات القراءة</string>
+    <string name="reader_night">القراءة الليلية</string>
+    <string name="reader_page_view">عرض الصفحة</string>
+    <string name="reader_fit_page">الصفحة كاملة</string>
+    <string name="reader_fit_width">ملاءمة العرض</string>
+    <string name="reader_bookmarks">علامات القراءة</string>
+    <string name="reader_focus">وضع التركيز</string>
+    <string name="reader_reveal">إظهار أزرار القراءة</string>
+    <string name="reader_focus_hint">المس الصفحة مرة واحدة لإظهار الأزرار</string>
+    <string name="reader_next">التالي</string>
+    <string name="reader_previous">السابق</string>
+    <string name="reader_zoom_in">تكبير</string>
+    <string name="reader_zoom_out">تصغير</string>
+    <string name="reader_zoom_percent">%1$s٪</string>
+    <string name="reader_page">صفحة %1$s</string>
+    <string name="reader_page_description">%1$s، صفحة %2$s من %3$s</string>
+    <string name="reader_page_number">رقم الصفحة</string>
+    <string name="reader_total">من %1$s</string>
+    <string name="reader_go">انتقال</string>
+    <string name="reader_invalid_page">اكتب رقم صفحة من ١ إلى %1$s</string>
+    <string name="reader_save_mark">حفظ العلامة</string>
+    <string name="reader_mark_name">اسم العلامة</string>
+    <string name="reader_mark_saved">تم حفظ علامة القراءة</string>
+    <string name="reader_no_marks">لا توجد علامات لهذا الكتاب بعد.</string>
+    <string name="reader_remove_mark">حذف العلامة: %1$s</string>
+    <string name="reader_close">إغلاق</string>
+    <string name="reader_loading">جارٍ فتح الكتاب…</string>
+    <string name="reader_missing">ملف PDF لهذا الكتاب غير متاح.</string>
+    <string name="reader_open_error">تعذّر فتح ملف الكتاب.</string>
+    <string name="reader_page_error">تعذّر عرض هذه الصفحة.</string>
+    <string name="reader_retry">إعادة المحاولة</string>
+</resources>

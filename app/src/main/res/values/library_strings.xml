@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_brand" translatable="false">SHADOWBOOKS</string>
+    <string name="library_title">المكتبة</string>
+    <string name="library_subtitle">منهج الصف الثالث الثانوي</string>
+    <string name="library_subject_count">%1$s مادة</string>
+    <string name="library_open_book">فتح الكتاب</string>
+    <string name="library_choose_volume">اختيار الجزء أو النسخة</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="welcome_identity">الجمهورية اليمنية، SHADOWBOOKS</string>
+    <string name="welcome_title">منهج الصف الثالث الثانوي</string>
+    <string name="welcome_subtitle">مكتبتك المدرسية الرقمية</string>
+    <string name="welcome_project">مشروع تخرج: الدفعه التي لن تُنسئ....</string>
+    <string name="welcome_year">\" للعام الدراسي 2027 \"</string>
+    <string name="welcome_wish">اتمنى التوفيق للجميع، شكراً</string>
+    <string name="welcome_enter">دخول</string>
+    <string name="welcome_credit">إعداد: محمد حجر</string>
+</resources>

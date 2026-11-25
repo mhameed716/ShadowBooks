@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="device_pdf_title">ملفات الهاتف</string>
+    <string name="device_pdf_subtitle">افتح ملفات PDF المحفوظة على جهازك</string>
+    <string name="device_pdf_pick">اختيار ملفات PDF</string>
+    <string name="device_pdf_permission_note">سيظهر منتقي ملفات أندرويد. اختر ملفًا أو أكثر، وسيقتصر إذن القراءة على الملفات التي تحددها فقط؛ لا يحتاج التطبيق إلى صلاحية عامة لقراءة التخزين.</string>
+    <string name="device_pdf_empty">لم تضف ملفات بعد. اختر ملفات PDF من هاتفك لتظهر هنا وتُفتح في قارئ التطبيق.</string>
+    <string name="device_pdf_count">ملفاتك المضافة: %1$d</string>
+    <string name="device_pdf_added">تمت إضافة %1$d ملف إلى القائمة.</string>
+    <string name="device_pdf_access_failed">تعذّر حفظ إذن قراءة أحد الملفات. أعد اختياره من منتقي ملفات أندرويد.</string>
+    <string name="device_pdf_choose_pdf">اختر ملفات PDF فقط.</string>
+    <string name="device_pdf_unnamed">ملف PDF</string>
+    <string name="device_pdf_open_hint">اضغط للقراءة داخل ShadowBooks</string>
+    <string name="device_pdf_remove">إزالة %1$s من القائمة</string>
+</resources>
