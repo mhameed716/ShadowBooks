@@ -176,6 +176,8 @@ done
 # Islamic exam PDFs (internal 00- prefix, hidden in the UI) shown beside the first file in the Islamic exams card.
 ISLAMIC_EXAMS=(
   '00-نماذج_اسلامية_التحديث_الجديد_ثالث_ثانوي_2026_(1).pdf|1oWTZf4ctnsbzIzyJA4J02c7JiFIXKg-7'
+  '00-نماذج_2025.pdf|1Ra1GxGSZA1y7TOX92QunTh1jLLHjvip6'
+  '00-بنك_الاسئله_في_الاسلاميه_1.pdf|1_ehUmZ7IDi7YDMrD8aPyjtwIF34GfSWB'
 )
 for entry in "${ISLAMIC_EXAMS[@]}"; do
   filename="${entry%%|*}"
