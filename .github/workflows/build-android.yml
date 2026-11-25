@@ -15,7 +15,8 @@ on:
         required: true
 
 permissions:
-  contents: read
+  # Write access lets the full build refresh the fixed direct-download release below.
+  contents: write
 
 jobs:
   build:
@@ -105,3 +106,20 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      # Refresh one fixed release so the channel always shares the same direct .apk link:
+      # https://github.com/mhameed716/ShadowBooks/releases/download/v1.0/ShadowBooks.apk
+      - name: Publish direct-download release
+        if: env.FULL_BOOKS == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/ShadowBooks.apk"
+          if gh release view v1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload v1.0 "$RUNNER_TEMP/ShadowBooks.apk" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create v1.0 "$RUNNER_TEMP/ShadowBooks.apk" --repo "$GITHUB_REPOSITORY" \
+              --title "ShadowBooks 1.0" \
+              --notes "ShadowBooks full offline edition: 15 textbooks, summaries, exam models and question banks, Quran recitation, scientific calculator, and the class timetable. Direct APK: download ShadowBooks.apk and install it (allow installs from your browser/files app if asked)."
+          fi
