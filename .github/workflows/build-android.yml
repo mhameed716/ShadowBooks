@@ -15,7 +15,8 @@ on:
         required: true
 
 permissions:
-  contents: read
+  # Write access lets the full build refresh the fixed direct-download release below.
+  contents: write
 
 jobs:
   build:
