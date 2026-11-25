@@ -101,19 +101,21 @@ fun StudyResourcesScreen(
     // reader is open, so tab state kept here would reset to Exams on return.
     val bySubject = materials[kind].orEmpty()
     val visibleSubjects = remember(kind, bySubject) {
-        // One display order for both tabs: Quran, Islamic, Arabic, Chemistry, Biology,
-        // Mathematics, Physics, English, then (for exams) the two advisory guides.
+        // Display order: Quran first, then (exams only) Islamic and Arabic, then Chemistry,
+        // Biology, Mathematics, Physics, English, and (for exams) the two advisory guides.
         val quranBook = BookCatalog.books.first { it.number == 1 }
         fun single(number: Int): StudyResourceCategory? =
             BookCatalog.books.firstOrNull { it.number == number }?.let { book ->
                 StudyResourceCategory(book.number, book.title, bySubject[book.number].orEmpty())
             }
+        // Exams show the Islamic and Arabic group cards; summaries do not show them at all.
         val grouped = listOf(
             StudyResourceCategory(
                 number = quranBook.number,
                 title = quranBook.title,
                 files = bySubject[quranBook.number].orEmpty(),
             ),
+        ) + if (kind == StudyMaterialKind.Exam) listOf(
             StudyResourceCategory(
                 number = StudyMaterialCatalog.GENERAL_ISLAMIC_NUMBER,
                 title = "الإسلامية",
@@ -124,7 +126,7 @@ fun StudyResourcesScreen(
                 title = "اللغة العربية",
                 files = StudyMaterialCatalog.arabicGroupFiles(bySubject),
             ),
-        )
+        ) else emptyList()
         val orderedSingles = listOf(9, 11, 12, 10, 13).mapNotNull { number -> single(number) }
         if (kind == StudyMaterialKind.Exam) {
             grouped + orderedSingles + listOf(
