@@ -92,6 +92,12 @@ internal data class Worksheet(
             errorReport("تحقّق من الأبعاد ومجال القيم.")
         } catch (_: ArithmeticException) {
             errorReport("النتيجة غير معرّفة لهذه القيم.")
+        } catch (_: IllegalArgumentException) {
+            // NumberFormatException, require() failures and other library argument checks
+            // must surface as an in-sheet problem, never as an app crash.
+            errorReport("تحقّق من الأبعاد ومجال القيم.")
+        } catch (_: RuntimeException) {
+            errorReport("تعذّر إتمام هذا الحساب لهذه القيم.")
         }
     }
     private fun errorReport(message: String) = SheetReport(message, problem = true)

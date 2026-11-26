@@ -44,12 +44,13 @@ private class PrettyPrinter(private val src: String) {
     private val map = IntArray(src.length + 1) { -1 }
 
     fun render(): PrettyExpression {
-        if (src.isNotEmpty()) map[0] = 0
+        // Even an empty entry has one valid caret position: index 0 in both texts.
+        map[0] = 0
         renderUntil(src.length)
         // Any internal position never anchored (inside a replaced word) snaps to the last
         // printed position at or before it, keeping the map monotonic.
         for (i in 1..src.length) if (map[i] < 0) map[i] = map[i - 1]
-        if (src.isNotEmpty()) map[src.length] = out.length
+        map[src.length] = out.length
         return PrettyExpression(out.toString(), raised.toList(), lowered.toList(), map)
     }
 
