@@ -10,9 +10,7 @@
     <string name="welcome_credit">إعداد: محمد حجر</string>
     <string name="welcome_gate_title">تابع قناة الواتساب</string>
     <string name="welcome_gate_subtitle">أدخل كود الاشتراك المنشور في القناة</string>
-    <string name="welcome_gate_code_hint">كود الاشتراك</string>
     <string name="welcome_gate_follow">تابع</string>
-    <string name="welcome_gate_cancel">إلغاء</string>
     <string name="welcome_gate_error">الكود غير صحيح، تابع القناة واكتب الكود المنشور فيها</string>
     <string name="welcome_gate_badge">شعار قناة الواتساب</string>
 </resources>
