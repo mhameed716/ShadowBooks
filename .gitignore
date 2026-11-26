@@ -14,3 +14,9 @@ app/src/main/assets/books/quran-audio/
 # This supplied edition is paired by digest with the prepared Arabic pages.
 !app/src/main/assets/books/english-student-book.pdf
 __pycache__/
+
+# Signing keystores: only the encrypted keystore/shadowbooks-release.p12.enc is committed.
+*.p12
+*.jks
+*.keystore
+!keystore/shadowbooks-release.p12.enc

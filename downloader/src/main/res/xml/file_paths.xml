@@ -3,6 +3,10 @@
     <external-files-path
         name="downloads"
         path="Download/" />
+    <!-- The published ShadowBooks.apk in the public Downloads folder (pre-Android 10 installs). -->
+    <external-path
+        name="public_downloads"
+        path="Download/" />
     <files-path
         name="internal"
         path="." />
