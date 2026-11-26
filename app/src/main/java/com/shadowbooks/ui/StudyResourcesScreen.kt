@@ -101,8 +101,8 @@ fun StudyResourcesScreen(
     // reader is open, so tab state kept here would reset to Exams on return.
     val bySubject = materials[kind].orEmpty()
     val visibleSubjects = remember(kind, bySubject) {
-        // Display order: Quran first, then (exams only) Islamic and Arabic, then Chemistry,
-        // Biology, Mathematics, Physics, English, and (for exams) the two advisory guides.
+        // Display order: for exams, the two advisory guides first; then Quran, (exams only)
+        // Islamic and Arabic, then Chemistry, Biology, Mathematics, Physics, English.
         val quranBook = BookCatalog.books.first { it.number == 1 }
         fun single(number: Int): StudyResourceCategory? =
             BookCatalog.books.firstOrNull { it.number == number }?.let { book ->
@@ -129,7 +129,8 @@ fun StudyResourcesScreen(
         ) else emptyList()
         val orderedSingles = listOf(9, 11, 12, 10, 13).mapNotNull { number -> single(number) }
         if (kind == StudyMaterialKind.Exam) {
-            grouped + orderedSingles + listOf(
+            // The two advisory guides open the exams list, ahead of every subject.
+            listOf(
                 StudyResourceCategory(
                     number = StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER,
                     title = "كيف تستفيد من النماذج الوزارية؟",
@@ -140,7 +141,7 @@ fun StudyResourcesScreen(
                     title = "الفرق بين النموذج وبنك الأسئلة",
                     files = bySubject[StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER].orEmpty(),
                 ),
-            )
+            ) + grouped + orderedSingles
         } else {
             grouped + orderedSingles
         }
