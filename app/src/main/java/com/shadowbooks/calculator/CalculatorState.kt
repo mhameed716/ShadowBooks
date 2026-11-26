@@ -139,6 +139,7 @@ internal data class CalculatorState(
                 }
             }
         } catch (e: CalculationError) { s.copy(error = e.issue, complete = false) }
+        catch (_: RuntimeException) { s.copy(error = MathIssue.Syntax, complete = false) }
             .invalidateIfMemoryChanged(this)
     }
 

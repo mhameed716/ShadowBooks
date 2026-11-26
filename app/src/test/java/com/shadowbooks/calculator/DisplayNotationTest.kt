@@ -5,6 +5,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DisplayNotationTest {
+    @Test fun emptyEntryHasOneValidCaretPosition() {
+        // The pad opens (and AC/DEL can return) with no entry: the display must not index -1.
+        val pretty = prettyExpression("")
+        assertEquals("", pretty.text)
+        assertEquals(listOf(0), pretty.indexMap.toList())
+        assertEquals("", prettyExpression("").text.take(pretty.indexMap[0]))
+    }
+
     @Test fun plainEntriesPrintUnchanged() {
         assertEquals("2+3×4", prettyExpression("2+3×4").text)
         assertEquals("10×sin(30)", prettyExpression("10×sin(30)").text)

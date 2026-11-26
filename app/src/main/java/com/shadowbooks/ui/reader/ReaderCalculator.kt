@@ -151,6 +151,7 @@ private fun CalculatorDisplay(state: CalculatorState, height: Dp) {
         // The entry is stored in plain function words; the screen prints the keypad symbols.
         val pretty = remember(state.expression) { prettyExpression(state.expression) }
         val shownCursor = pretty.indexMap[state.cursor.coerceIn(0, state.expression.length)]
+            .coerceIn(0, pretty.text.length)
         val input = buildAnnotatedString {
             append(pretty.text.take(shownCursor))
             if (!state.complete) withStyle(SpanStyle(color = orange)) { append('│') }

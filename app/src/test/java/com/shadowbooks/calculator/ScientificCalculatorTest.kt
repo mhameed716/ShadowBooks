@@ -11,6 +11,17 @@ class ScientificCalculatorTest {
     private fun checkMath(expression: String, expected: Double, unit: AngleUnit = AngleUnit.DEG) =
         assertEquals(expression, expected, calculate(expression, unit), 1e-9)
 
+    @Test fun emptyEntryEvaluatesAndClearsWithoutCrashing() {
+        // Opening the pad, pressing = with no entry, and clearing back to empty are all valid.
+        val fresh = CalculatorState()
+        assertEquals("", fresh.expression); assertEquals(0, prettyExpression(fresh.expression).indexMap[0])
+        val evaluated = fresh.tap("=")
+        assertTrue(evaluated.complete); assertNull(evaluated.error); assertEquals(0.0, evaluated.answer, 0.0)
+        val cleared = CalculatorState().tap("5", "+", "AC")
+        assertEquals("", cleared.expression); assertNull(cleared.error)
+        assertEquals(listOf(0), prettyExpression(cleared.expression).indexMap.toList())
+    }
+
     @Test fun actualKeySequenceFromTheBookExample() {
         val s = CalculatorState().tap("1", "0", "×", "sin", "3", "0", ")", "=")
         assertEquals("10×sin(30)", s.expression); assertTrue(s.complete); assertNull(s.error)
