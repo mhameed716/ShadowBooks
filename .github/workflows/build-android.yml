@@ -107,8 +107,13 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-      # Refresh one fixed release so the channel always shares the same direct .apk link:
-      # https://github.com/mhameed716/ShadowBooks/releases/download/v1.0/ShadowBooks.apk
+      - name: Build resumable downloader APK
+        if: env.FULL_BOOKS == 'true'
+        run: bash ./gradlew --no-daemon :downloader:assembleDebug
+
+      # Refresh one fixed release so the channel always shares the same direct links.
+      # The tiny downloader fetches the large APK in resumable HTTP Range chunks; each
+      # chunk starts from the permanent release URL and receives a fresh signed URL.
       - name: Publish direct-download release
         if: env.FULL_BOOKS == 'true'
         env:
@@ -116,10 +121,13 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/ShadowBooks.apk"
+          cp downloader/build/outputs/apk/debug/downloader-debug.apk "$RUNNER_TEMP/ShadowBooks-Downloader.apk"
+          release_notes="Recommended: install ShadowBooks-Downloader.apk first (tiny), open it, and let it download and install ShadowBooks in resumable chunks. This avoids a 940 MB browser download being cancelled in the middle. Advanced users may still download ShadowBooks.apk directly. Full offline contents: 15 textbooks, summaries, exam models and question banks, Quran recitation, scientific calculator, and class timetable."
           if gh release view v1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload v1.0 "$RUNNER_TEMP/ShadowBooks.apk" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit v1.0 --repo "$GITHUB_REPOSITORY" --title "ShadowBooks 1.0" --notes "$release_notes"
+            gh release upload v1.0 "$RUNNER_TEMP/ShadowBooks.apk" "$RUNNER_TEMP/ShadowBooks-Downloader.apk" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create v1.0 "$RUNNER_TEMP/ShadowBooks.apk" --repo "$GITHUB_REPOSITORY" \
+            gh release create v1.0 "$RUNNER_TEMP/ShadowBooks.apk" "$RUNNER_TEMP/ShadowBooks-Downloader.apk" --repo "$GITHUB_REPOSITORY" \
               --title "ShadowBooks 1.0" \
-              --notes "ShadowBooks full offline edition: 15 textbooks, summaries, exam models and question banks, Quran recitation, scientific calculator, and the class timetable. Direct APK: download ShadowBooks.apk and install it (allow installs from your browser/files app if asked)."
+              --notes "$release_notes"
           fi
