@@ -14,12 +14,37 @@ android {
         applicationId = "com.shadowbooks"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0"
         manifestPlaceholders["appLabel"] = "ShadowBooks"
     }
 
+    signingConfigs {
+        // One permanent release key for every future build, so updates always install
+        // over the previous version. The keystore itself is stored in the repository
+        // only in encrypted form (keystore/shadowbooks-release.p12.enc); CI decrypts it
+        // with the SHADOWBOOKS_SIGNING_PASSWORD secret and points these env vars at it.
+        // Without the env vars the release build stays unsigned rather than silently
+        // falling back to a throwaway debug key.
+        create("release") {
+            val keystorePath = System.getenv("SHADOWBOOKS_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SHADOWBOOKS_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SHADOWBOOKS_KEY_ALIAS") ?: "shadowbooks"
+                keyPassword = System.getenv("SHADOWBOOKS_KEY_PASSWORD")
+                    ?: System.getenv("SHADOWBOOKS_KEYSTORE_PASSWORD")
+                storeType = "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
         // A small, installable sibling of the regular app. Its data/cache never mix with the full edition.
         create("trial") {
             initWith(getByName("release"))

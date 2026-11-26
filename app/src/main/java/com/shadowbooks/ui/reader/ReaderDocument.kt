@@ -15,6 +15,7 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,7 +34,7 @@ internal class ReaderDocument private constructor(
     val firstAspect: Float,
 ) {
     private val lock = Mutex()
-    private var closed = false
+    @Volatile private var closed = false
     private val cache = object : LruCache<PageKey, RenderedPage>(
         (Runtime.getRuntime().maxMemory() / 8).coerceIn(4L shl 20, 20L shl 20).toInt(),
     ) {
@@ -46,7 +47,9 @@ internal class ReaderDocument private constructor(
 
     suspend fun page(index: Int, targetWidth: Int, arabic: Boolean = false): RenderedPage = withContext(Dispatchers.IO) {
         lock.withLock {
-            check(!closed)
+            // A page requested while the reader is closing is a normal cancellation,
+            // not a page failure: never flash the per-page error tile for it.
+            if (closed) throw CancellationException("ReaderDocument closed")
             val translated = arabic && arabicText(index) != null
             val renderer = if (translated) checkNotNull(companionPdf).renderer else original
             val key = PageKey(index, targetWidth, translated)

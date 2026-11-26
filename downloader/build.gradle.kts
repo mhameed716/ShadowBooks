@@ -10,8 +10,24 @@ android {
         applicationId = "com.shadowbooks.downloader"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0"
+    }
+
+    signingConfigs {
+        // Same permanent release key as the main app (see app/build.gradle.kts), so
+        // downloader updates also install over previous versions forever.
+        create("release") {
+            val keystorePath = System.getenv("SHADOWBOOKS_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SHADOWBOOKS_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SHADOWBOOKS_KEY_ALIAS") ?: "shadowbooks"
+                keyPassword = System.getenv("SHADOWBOOKS_KEY_PASSWORD")
+                    ?: System.getenv("SHADOWBOOKS_KEYSTORE_PASSWORD")
+                storeType = "PKCS12"
+            }
+        }
     }
 
     buildTypes {
@@ -19,7 +35,7 @@ android {
             isMinifyEnabled = false
         }
         getByName("release") {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
         }
     }

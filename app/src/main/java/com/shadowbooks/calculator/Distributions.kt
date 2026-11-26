@@ -18,6 +18,9 @@ internal fun distribution(law: Law, op: Probability, params: List<Double>, x: Do
     val a = params.first()
     if (op == Probability.Interval) checkDomain(upper != null && upper >= x)
     if (op == Probability.Quantile) checkDomain(x in 0.0..1.0)
+    // Non-null exactly when op is Interval (checked above); kept as a plain value so
+    // no force-unwrap remains on any calculation path.
+    val intervalUpper = if (op == Probability.Interval) upper ?: fail(MathIssue.Syntax) else 0.0
     val discrete: IntegerDistribution? = when (law) {
         Law.Binomial -> {
             val n = safeInt(a); checkDomain(n in 0..1_000_000L && params[1] in 0.0..1.0); BinomialDistribution(null, n.toInt(), params[1])
@@ -48,7 +51,7 @@ internal fun distribution(law: Law, op: Probability, params: List<Double>, x: Do
             Probability.Density -> if (x != floor(x) || x < lo || x > hi) 0.0 else discrete.probability(x.toInt())
             Probability.Cdf -> tail(x)
             Probability.Interval -> {
-                val l = maxOf(kotlin.math.ceil(x),lo.toDouble()); val h = minOf(floor(upper!!),hi.toDouble())
+                val l = maxOf(kotlin.math.ceil(x),lo.toDouble()); val h = minOf(floor(intervalUpper),hi.toDouble())
                 when { h < l -> 0.0; h == l -> discrete.probability(l.toInt()); l > discrete.numericalMean -> tail(l-1,true)-tail(h,true)
                     else -> tail(h)-tail(l-1) }.coerceIn(0.0,1.0)
             }
@@ -73,9 +76,9 @@ internal fun distribution(law: Law, op: Probability, params: List<Double>, x: Do
         Probability.Density -> if (law == Law.ChiSquare && x == 0.0) when { a < 2 -> Double.POSITIVE_INFINITY; a == 2.0 -> 0.5; else -> 0.0 } else d.density(x)
         Probability.Cdf -> d.cumulativeProbability(x)
         Probability.Interval -> when {
-            d is NormalDistribution -> d.probability(x, upper!!)
-            x > a -> Gamma.regularizedGammaQ(a/2, x/2) - Gamma.regularizedGammaQ(a/2, upper!!/2)
-            else -> d.cumulativeProbability(upper!!) - d.cumulativeProbability(x)
+            d is NormalDistribution -> d.probability(x, intervalUpper)
+            x > a -> Gamma.regularizedGammaQ(a/2, x/2) - Gamma.regularizedGammaQ(a/2, intervalUpper/2)
+            else -> d.cumulativeProbability(intervalUpper) - d.cumulativeProbability(x)
         }.coerceIn(0.0,1.0)
         Probability.Quantile -> d.inverseCumulativeProbability(x)
     }

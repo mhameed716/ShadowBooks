@@ -50,6 +50,24 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash scripts/download_books.sh
 
+      # The permanent signing key lives in the repo only encrypted. Without this one
+      # secret the release build must stop: silently using any other key would break
+      # updates for every installed phone.
+      - name: Decrypt the permanent signing key
+        if: env.FULL_BOOKS == 'true'
+        env:
+          SHADOWBOOKS_SIGNING_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SHADOWBOOKS_SIGNING_PASSWORD:-}" ]; then
+            echo "::error::Missing GitHub secret SHADOWBOOKS_SIGNING_PASSWORD. Add it under Settings > Secrets and variables > Actions so release builds can be signed with the permanent ShadowBooks key."
+            exit 1
+          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 \
+            -in keystore/shadowbooks-release.p12.enc \
+            -out "$RUNNER_TEMP/shadowbooks-release.p12" \
+            -pass env:SHADOWBOOKS_SIGNING_PASSWORD
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -79,37 +97,63 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-      - name: Build debug APK with offline books, study PDFs, and Quran audio
+      - name: Build release APK with offline books, study PDFs, and Quran audio
         if: env.FULL_BOOKS == 'true'
-        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        env:
+          SHADOWBOOKS_KEYSTORE_FILE: ${{ runner.temp }}/shadowbooks-release.p12
+          SHADOWBOOKS_KEYSTORE_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+          SHADOWBOOKS_KEY_ALIAS: shadowbooks
+          SHADOWBOOKS_KEY_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+        run: bash ./gradlew --no-daemon :app:testReleaseUnitTest :app:assembleRelease
 
       - name: Verify packaged study PDFs
         if: env.FULL_BOOKS == 'true'
-        run: python3 scripts/verify_study_assets.py --apk app/build/outputs/apk/debug/app-debug.apk
+        run: python3 scripts/verify_study_assets.py --apk app/build/outputs/apk/release/app-release.apk
 
       - name: Verify packaged pupil translation and report actual sizes
         if: env.FULL_BOOKS == 'true'
         run: |
           set -eo pipefail
-          python3 scripts/verify_prepared_book.py --apk app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 scripts/verify_prepared_book.py --apk app/build/outputs/apk/release/app-release.apk | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Verify packaged Quran recitation
         if: env.FULL_BOOKS == 'true'
-        run: python3 scripts/verify_quran_audio.py --apk app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/verify_quran_audio.py --apk app/build/outputs/apk/release/app-release.apk | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The printed certificate fingerprint must stay identical across releases;
+      # it proves every update is signed with the same permanent key.
+      - name: Verify release signature and non-debuggable packaging
+        if: env.FULL_BOOKS == 'true'
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release.apk
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose --print-certs "$apk" | tee -a "$GITHUB_STEP_SUMMARY"
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/full-badging.txt"
+          grep "^package: name='com.shadowbooks'" "$RUNNER_TEMP/full-badging.txt"
+          if grep -q "application-debuggable" "$RUNNER_TEMP/full-badging.txt"; then
+            echo "::error::Release APK is debuggable; refusing to publish it."
+            exit 1
+          fi
 
       - name: Publish full APK artifact
         if: env.FULL_BOOKS == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowBooks-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: ShadowBooks-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
 
       - name: Build resumable downloader APK
         if: env.FULL_BOOKS == 'true'
-        run: bash ./gradlew --no-daemon :downloader:assembleDebug
+        env:
+          SHADOWBOOKS_KEYSTORE_FILE: ${{ runner.temp }}/shadowbooks-release.p12
+          SHADOWBOOKS_KEYSTORE_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+          SHADOWBOOKS_KEY_ALIAS: shadowbooks
+          SHADOWBOOKS_KEY_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+        run: bash ./gradlew --no-daemon :downloader:assembleRelease
 
       # Refresh one fixed release so the channel always shares the same direct links.
       # The tiny downloader fetches the large APK in resumable HTTP Range chunks; each
@@ -120,9 +164,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/ShadowBooks.apk"
-          cp downloader/build/outputs/apk/debug/downloader-debug.apk "$RUNNER_TEMP/ShadowBooks-Downloader.apk"
-          release_notes="Recommended: install ShadowBooks-Downloader.apk first (tiny), open it, and let it download and install ShadowBooks in resumable chunks. This avoids a 940 MB browser download being cancelled in the middle. Advanced users may still download ShadowBooks.apk directly. Full offline contents: 15 textbooks, summaries, exam models and question banks, Quran recitation, scientific calculator, and class timetable."
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/ShadowBooks.apk"
+          cp downloader/build/outputs/apk/release/downloader-release.apk "$RUNNER_TEMP/ShadowBooks-Downloader.apk"
+          release_notes="Recommended: install ShadowBooks-Downloader.apk first (tiny), open it, and let it download ShadowBooks for you. The downloader runs as a foreground service with parallel connections (much faster), resumes automatically if the network drops or the phone restarts, verifies the file, and saves ShadowBooks.apk into your phone's Downloads folder, ready to install. Note: this signed release cannot update older debug-signed copies in place; uninstall the old ShadowBooks once, then install this one. Every future update will install over it normally. Advanced users may still download ShadowBooks.apk directly. Full offline contents: 15 textbooks, summaries, exam models and question banks, Quran recitation, scientific calculator, and class timetable."
           if gh release view v1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit v1.0 --repo "$GITHUB_REPOSITORY" --title "ShadowBooks 1.0" --notes "$release_notes"
             gh release upload v1.0 "$RUNNER_TEMP/ShadowBooks.apk" "$RUNNER_TEMP/ShadowBooks-Downloader.apk" --clobber --repo "$GITHUB_REPOSITORY"
