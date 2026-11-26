@@ -277,7 +277,7 @@ fun StudyResourcesScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { onChooserCategoryChange(null) }) { Text("إغلاق", color = StudyCyan, fontFamily = StudyFont) } },
+            confirmButton = {},
         )
     }
 
@@ -297,7 +297,7 @@ fun StudyResourcesScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { onChoosingGoldenUnitsChange(false) }) { Text("إغلاق", color = StudyCyan, fontFamily = StudyFont) } },
+            confirmButton = {},
         )
     }
 }
