@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.shadowbooks.R
+import java.security.MessageDigest
 
 private const val HeroAspect = 953f / 672f
 private val Navy = Color(0xFF02132D)
@@ -91,13 +92,28 @@ private val Tajawal = FontFamily(
 )
 private val WhatsGreen = Color(0xFF25D366)
 
-// Channel gate (method "ج"): the code is posted inside the WhatsApp channel only. It is kept
-// out of every string resource and label so it never appears on screen; typing it once unlocks
-// the app on this device.
+// Channel gate (method "ج"): the code is posted inside the WhatsApp channel only. The app
+// never contains the readable code — only its SHA-256 digest is stored (split below and
+// reassembled at check time), so the code cannot be read out of the APK. Typing the code
+// once unlocks the app on this device.
 private const val ChannelUrl = "https://whatsapp.com/channel/0029Vb8xx5LCsU9RQXEXTS1t"
-private const val ChannelCode = "SHADOW2027"
+private const val ChannelCodeDigest =
+    "e9e013180772e5d3a0fc7f573b6accee" + "38ce953260607251aebc21627ae3b8a1"
 private const val GatePreferences = "welcome_gate"
 private const val GateUnlockedKey = "channel_unlocked"
+
+/** Checks the typed code against the stored digest; the readable code is never stored. */
+private fun channelCodeMatches(input: String): Boolean {
+    val normalized = input.trim().uppercase()
+    if (normalized.isEmpty()) return false
+    val typedDigest = MessageDigest.getInstance("SHA-256")
+        .digest(normalized.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+    return MessageDigest.isEqual(
+        typedDigest.toByteArray(Charsets.UTF_8),
+        ChannelCodeDigest.toByteArray(Charsets.UTF_8),
+    )
+}
 
 @Composable
 fun WelcomeScreen(onEnter: () -> Unit) {
@@ -349,7 +365,7 @@ private fun ChannelGateDialog(onDismiss: () -> Unit, onUnlocked: () -> Unit) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     // RTL order: the first child sits at the right — دخول right, تابع left.
                     Button(
-                        onClick = { if (code.trim().uppercase() == ChannelCode) onUnlocked() else error = true },
+                        onClick = { if (channelCodeMatches(code)) onUnlocked() else error = true },
                         modifier = Modifier.weight(1f).heightIn(min = 50.dp).background(EnterBrush, CircleShape),
                         shape = CircleShape,
                         border = BorderStroke(1.dp, Color(0xFF48EAFF)),

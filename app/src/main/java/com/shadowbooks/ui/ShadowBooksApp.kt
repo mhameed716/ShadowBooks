@@ -33,6 +33,9 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     var readerFromResources by rememberSaveable { mutableStateOf(false) }
     // Kept at the root (never leaves composition) so returning from the reader restores the same tab.
     var studyKind by rememberSaveable { mutableStateOf(StudyMaterialKind.Exam) }
+    // Same treatment for the file-chooser popup: still open when back from the reader.
+    var studyChooserCategory by rememberSaveable { mutableStateOf<Int?>(null) }
+    var studyChoosingGoldenUnits by rememberSaveable { mutableStateOf(false) }
     var readerFromDevicePdfs by rememberSaveable { mutableStateOf(false) }
     val libraryScroll = rememberLazyListState()
     val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
@@ -95,7 +98,11 @@ fun ShadowBooksApp(onExit: () -> Unit) {
             )
             AppDestination.StudyResources -> StudyResourcesScreen(
                 kind = studyKind,
-                onKindChange = { studyKind = it },
+                onKindChange = { studyKind = it; studyChooserCategory = null; studyChoosingGoldenUnits = false },
+                chooserCategoryNumber = studyChooserCategory,
+                onChooserCategoryChange = { studyChooserCategory = it },
+                choosingGoldenUnits = studyChoosingGoldenUnits,
+                onChoosingGoldenUnitsChange = { studyChoosingGoldenUnits = it },
                 onLibrary = { destination = AppDestination.Library },
                 onTimetable = { destination = AppDestination.Timetable },
                 onDevicePdfs = { destination = AppDestination.DevicePdfs },
