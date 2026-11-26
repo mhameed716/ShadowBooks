@@ -65,6 +65,12 @@ import kotlinx.coroutines.withContext
 internal const val AN_NUR_AUDIO_ASSET = "books/quran-audio/an-nur-abdul-basit-r1.mp3"
 private const val AN_NUR_AUDIO_FILE = "quran-audio/an-nur-abdul-basit-r1.mp3"
 
+// Playback memory: the last reciter and its position survive leaving the app, so pressing
+// play again resumes at the same minute instead of restarting the recitation.
+private const val QURAN_AUDIO_PREFS = "quran_audio"
+private const val QURAN_AUDIO_RECITER_KEY = "reciter_index"
+private fun quranPositionKey(reciter: QuranReciter): String = "position_" + reciter.cacheFile
+
 private data class QuranReciter(val label: String, val assetPath: String, val cacheFile: String)
 
 private val QURAN_RECITERS = listOf(
@@ -77,6 +83,13 @@ private val QURAN_RECITERS = listOf(
 internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val prefs = remember { context.getSharedPreferences(QURAN_AUDIO_PREFS, Context.MODE_PRIVATE) }
+    val savePosition: (QuranReciter, Int) -> Unit = { target, position ->
+        prefs.edit().putInt(quranPositionKey(target), position.coerceAtLeast(0)).apply()
+    }
+    val savedPosition: (QuranReciter) -> Int = { target ->
+        prefs.getInt(quranPositionKey(target), 0).coerceAtLeast(0)
+    }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var prepared by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
@@ -87,11 +100,15 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
     var playRequest by remember { mutableIntStateOf(0) }
     var seeking by remember { mutableStateOf(false) }
     var seekFraction by remember { mutableFloatStateOf(0f) }
-    var reciterIndex by remember { mutableIntStateOf(0) }
+    var reciterIndex by remember {
+        mutableIntStateOf(prefs.getInt(QURAN_AUDIO_RECITER_KEY, 0).coerceIn(QURAN_RECITERS.indices))
+    }
     val reciter = QURAN_RECITERS[reciterIndex]
     val selectReciter: (Int) -> Unit = { index ->
         if (index != reciterIndex) {
+            savePosition(reciter, runCatching { player?.currentPosition }.getOrNull() ?: positionMs)
             reciterIndex = index
+            prefs.edit().putInt(QURAN_AUDIO_RECITER_KEY, index).apply()
             runCatching { player?.release() }
             player = null
             prepared = false
@@ -122,7 +139,10 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
             )
             media.setOnPreparedListener { ready ->
                 durationMs = ready.duration.coerceAtLeast(0)
-                positionMs = 0
+                val saved = savedPosition(reciter)
+                val startAt = if (saved > 0 && saved < durationMs - 1_000) saved else 0
+                if (startAt > 0) runCatching { ready.seekTo(startAt) }
+                positionMs = startAt
                 loading = false
                 val started = runCatching { ready.start() }.isSuccess
                 prepared = started
@@ -132,6 +152,7 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
             media.setOnCompletionListener {
                 positionMs = durationMs
                 playing = false
+                savePosition(reciter, 0)
             }
             media.setOnErrorListener { _, _, _ ->
                 loading = false
@@ -161,14 +182,20 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
 
     val activePlayer = player
     DisposableEffect(activePlayer) {
-        onDispose { runCatching { activePlayer?.release() } }
+        onDispose {
+            runCatching { activePlayer?.currentPosition }.getOrNull()
+                ?.let { savePosition(reciter, it) }
+            runCatching { activePlayer?.release() }
+        }
     }
     DisposableEffect(lifecycle, activePlayer) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
+                val current = runCatching { activePlayer?.currentPosition }.getOrNull()
                 if (runCatching { activePlayer?.isPlaying == true }.getOrDefault(false)) {
                     runCatching { activePlayer?.pause() }
                 }
+                if (current != null) savePosition(reciter, current)
                 playing = false
             }
         }
@@ -177,10 +204,18 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
     }
     LaunchedEffect(activePlayer, prepared, seeking) {
         if (activePlayer != null && prepared) {
+            var ticksSinceSave = 0
             while (true) {
                 if (!seeking) {
                     val current = runCatching { activePlayer.currentPosition }.getOrNull()
-                    if (current != null) positionMs = current.coerceIn(0, durationMs.coerceAtLeast(0))
+                    if (current != null) {
+                        positionMs = current.coerceIn(0, durationMs.coerceAtLeast(0))
+                        ticksSinceSave++
+                        if (ticksSinceSave >= 20) {
+                            ticksSinceSave = 0
+                            if (playing) savePosition(reciter, positionMs)
+                        }
+                    }
                 }
                 delay(250)
             }
@@ -196,10 +231,12 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
             prepared && activePlayer != null -> {
                 if (playing) {
                     playing = runCatching { activePlayer.pause(); false }.getOrDefault(playing)
+                    savePosition(reciter, runCatching { activePlayer.currentPosition }.getOrNull() ?: positionMs)
                 } else {
                     if (durationMs > 0 && positionMs >= durationMs) {
                         runCatching { activePlayer.seekTo(0) }
                         positionMs = 0
+                        savePosition(reciter, 0)
                     }
                     playing = runCatching { activePlayer.start(); true }.getOrDefault(false)
                 }
@@ -263,6 +300,7 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
                                 val target = (seekFraction * durationMs).toInt().coerceIn(0, durationMs)
                                 runCatching { activePlayer?.seekTo(target) }
                                 positionMs = target
+                                savePosition(reciter, target)
                             }
                             seeking = false
                         },
@@ -297,6 +335,7 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
                                 val target = (positionMs - 10_000).coerceAtLeast(0)
                                 runCatching { activePlayer?.seekTo(target) }
                                 positionMs = target
+                                savePosition(reciter, target)
                             }
                         },
                         enabled = prepared,
@@ -340,6 +379,7 @@ internal fun QuranAudioPlayer(modifier: Modifier = Modifier) {
                                 val target = (positionMs + 10_000).coerceAtMost(durationMs)
                                 runCatching { activePlayer?.seekTo(target) }
                                 positionMs = target
+                                savePosition(reciter, target)
                             }
                         },
                         enabled = prepared,

@@ -33,10 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,6 +73,10 @@ private data class StudyResourceCategory(
 fun StudyResourcesScreen(
     kind: StudyMaterialKind,
     onKindChange: (StudyMaterialKind) -> Unit,
+    chooserCategoryNumber: Int?,
+    onChooserCategoryChange: (Int?) -> Unit,
+    choosingGoldenUnits: Boolean,
+    onChoosingGoldenUnitsChange: (Boolean) -> Unit,
     onLibrary: () -> Unit,
     onTimetable: () -> Unit,
     onDevicePdfs: () -> Unit,
@@ -146,10 +147,13 @@ fun StudyResourcesScreen(
             grouped + orderedSingles
         }
     }
-    var chooseForCategory by remember { mutableStateOf<StudyResourceCategory?>(null) }
-    var choosingGoldenUnits by remember { mutableStateOf(false) }
+    // Chooser state is hoisted to the app root (like the tab): this screen leaves the
+    // composition while the reader is open, so a popup kept here would be gone on return.
+    val chooseForCategory = chooserCategoryNumber?.let { number ->
+        visibleSubjects.firstOrNull { it.number == number }
+    }
     val openMaterial: (StudyMaterialFile, String) -> Unit = { file, categoryTitle ->
-        if (file.assetPath == StudyMaterialCatalog.GOLDEN_ENGLISH_PATH) choosingGoldenUnits = true
+        if (file.assetPath == StudyMaterialCatalog.GOLDEN_ENGLISH_PATH) onChoosingGoldenUnitsChange(true)
         else onOpen(file.asVolume(categoryTitle))
     }
     val categories = listOf(StudyMaterialKind.Exam, StudyMaterialKind.Summary)
@@ -242,7 +246,7 @@ fun StudyResourcesScreen(
                         when (files.size) {
                             0 -> Unit
                             1 -> openMaterial(files.single(), subject.title)
-                            else -> chooseForCategory = subject
+                            else -> onChooserCategoryChange(subject.number)
                         }
                     }
                 }
@@ -259,13 +263,13 @@ fun StudyResourcesScreen(
 
     chooseForCategory?.let { category ->
         AlertDialog(
-            onDismissRequest = { chooseForCategory = null },
+            onDismissRequest = { onChooserCategoryChange(null) },
             containerColor = Color(0xFF13233A),
             title = { Text(category.title, color = Color.White, fontFamily = StudyFont, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     category.files.forEach { file ->
-                        TextButton(onClick = { chooseForCategory = null; openMaterial(file, category.title) }) {
+                        TextButton(onClick = { openMaterial(file, category.title) }) {
                             Icon(Icons.Filled.Description, contentDescription = null, tint = StudyCyan, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(file.title, color = Color.White, fontFamily = StudyFont, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -273,19 +277,19 @@ fun StudyResourcesScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { chooseForCategory = null }) { Text("إغلاق", color = StudyCyan, fontFamily = StudyFont) } },
+            confirmButton = {},
         )
     }
 
     if (choosingGoldenUnits) {
         AlertDialog(
-            onDismissRequest = { choosingGoldenUnits = false },
+            onDismissRequest = { onChoosingGoldenUnitsChange(false) },
             containerColor = Color(0xFF13233A),
             title = { Text(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE, color = Color.White, fontFamily = StudyFont, fontWeight = FontWeight.Bold) },
             text = {
                 Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     goldenUnits.forEach { unit ->
-                        TextButton(onClick = { choosingGoldenUnits = false; onOpen(unit.asVolume(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE)) }) {
+                        TextButton(onClick = { onOpen(unit.asVolume(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE)) }) {
                             Icon(Icons.Filled.Description, contentDescription = null, tint = StudyCyan, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(unit.title, color = Color.White, fontFamily = StudyFont)
@@ -293,7 +297,7 @@ fun StudyResourcesScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { choosingGoldenUnits = false }) { Text("إغلاق", color = StudyCyan, fontFamily = StudyFont) } },
+            confirmButton = {},
         )
     }
 }
