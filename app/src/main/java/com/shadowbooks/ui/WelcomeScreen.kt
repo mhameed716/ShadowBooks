@@ -296,7 +296,7 @@ private fun ChannelGateDialog(onDismiss: () -> Unit, onUnlocked: () -> Unit) {
                     .fillMaxWidth()
                     .background(Color(0xFF062453), RoundedCornerShape(26.dp))
                     .border(1.dp, Gold.copy(alpha = 0.75f), RoundedCornerShape(26.dp))
-                    .padding(start = 20.dp, end = 20.dp, top = 54.dp, bottom = 14.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 60.dp, bottom = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -316,12 +316,7 @@ private fun ChannelGateDialog(onDismiss: () -> Unit, onUnlocked: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = error,
-                    label = {
-                        Text(
-                            stringResource(R.string.welcome_gate_code_hint),
-                            fontFamily = Tajawal, fontSize = 14.sp,
-                        )
-                    },
+                    shape = RoundedCornerShape(24.dp),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Ascii,
@@ -387,11 +382,8 @@ private fun ChannelGateDialog(onDismiss: () -> Unit, onUnlocked: () -> Unit) {
                         )
                     }
                 }
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.welcome_gate_cancel), color = SeaGlass, fontFamily = Tajawal, fontSize = 14.sp)
-                }
             }
-            GateBadge(Modifier.align(Alignment.TopCenter).offset(y = (-42).dp).size(84.dp))
+            GateBadge(Modifier.align(Alignment.TopCenter).offset(y = (-48).dp).size(96.dp))
         }
     }
 }
@@ -403,21 +395,37 @@ private fun GateBadge(modifier: Modifier = Modifier) {
     Canvas(modifier.semantics { contentDescription = description }) {
         val radius = size.minDimension / 2f
         val lightGreen = Color(0xFF8CF5B6)
-        drawCircle(color = Color(0xFF031633), radius = radius)
+        val neon = Color(0xFF35E0FF)
+        // Soft green halo, then the glossy dark disc and its gradient ring.
+        drawCircle(
+            brush = Brush.radialGradient(listOf(WhatsGreen.copy(alpha = 0.45f), Color.Transparent)),
+            radius = radius,
+        )
+        drawCircle(color = Color(0xFF031633), radius = radius * 0.94f)
         drawCircle(
             brush = Brush.sweepGradient(listOf(WhatsGreen, lightGreen, WhatsGreen)),
-            radius = radius - size.minDimension * 0.025f,
+            radius = radius * 0.94f - size.minDimension * 0.025f,
             style = Stroke(width = size.minDimension * 0.05f),
         )
         // Chat-bubble tail at the lower left of the ring.
         val tail = Path().apply {
-            moveTo(center.x - radius * 0.50f, center.y + radius * 0.44f)
-            lineTo(center.x - radius * 0.80f, center.y + radius * 0.88f)
-            lineTo(center.x - radius * 0.14f, center.y + radius * 0.70f)
+            moveTo(center.x - radius * 0.47f, center.y + radius * 0.41f)
+            lineTo(center.x - radius * 0.75f, center.y + radius * 0.82f)
+            lineTo(center.x - radius * 0.13f, center.y + radius * 0.66f)
             close()
         }
         drawPath(tail, WhatsGreen)
-        // Open book in the middle: two curved pages around a centre spine.
+        // Two readers silhouetted behind the book.
+        val silhouette = Color(0xFF14667F)
+        for (hx in listOf(center.x - radius * 0.26f, center.x + radius * 0.26f)) {
+            drawCircle(silhouette, radius = radius * 0.15f, center = Offset(hx, center.y - radius * 0.36f))
+            drawArc(
+                silhouette, 180f, 180f, true,
+                topLeft = Offset(hx - radius * 0.27f, center.y - radius * 0.32f),
+                size = Size(radius * 0.54f, radius * 0.46f),
+            )
+        }
+        // Neon open book: teal pages with a bright outline around a centre spine.
         val bookWidth = radius * 1.08f
         val bookHeight = radius * 0.74f
         val top = center.y - bookHeight * 0.40f
@@ -433,13 +441,16 @@ private fun GateBadge(modifier: Modifier = Modifier) {
             cubicTo(center.x + bookWidth * 0.30f, top + bookHeight * 0.48f, center.x + bookWidth * 0.12f, top + bookHeight * 0.52f, center.x, top + bookHeight * 0.70f)
             close()
         }
-        drawPath(leftPage, SeaGlass)
-        drawPath(rightPage, Color(0xFFC9F8FF))
+        drawPath(leftPage, Color(0xFF0E5A7A))
+        drawPath(rightPage, Color(0xFF12708F))
+        val outline = Stroke(width = size.minDimension * 0.022f)
+        drawPath(leftPage, neon, style = outline)
+        drawPath(rightPage, neon, style = outline)
         drawLine(
-            color = Color(0xFF0B5C86),
+            color = neon,
             start = Offset(center.x, top),
             end = Offset(center.x, top + bookHeight * 0.70f),
-            strokeWidth = size.minDimension * 0.018f,
+            strokeWidth = size.minDimension * 0.022f,
         )
     }
 }
