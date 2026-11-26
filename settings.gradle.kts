@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ShadowBooks"
 include(":app")
+include(":downloader")
