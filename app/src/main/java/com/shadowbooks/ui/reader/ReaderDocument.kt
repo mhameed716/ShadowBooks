@@ -10,6 +10,7 @@ import android.util.Log
 import android.util.LruCache
 import com.shadowbooks.BuildConfig
 import com.shadowbooks.data.BookVolume
+import com.shadowbooks.store.StoreContent
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -160,7 +161,14 @@ internal class ReaderDocument private constructor(
             val candidate = documentUri == null && PreparedPupilBook.isCandidate(volume.fileName, trial)
             val root = File(context.cacheDir, "shadowbooks-pdf")
             val dir = if (candidate) pupilCache(context, root) else root.apply { mkdirs() }
-            val file = if (documentUri == null) cacheAsset(context, dir, "books/$assetName") else null
+            // Store downloads live at the same destination the asset used to
+            // occupy; they win over the packaged asset when present.
+            val local = if (documentUri == null) {
+                StoreContent.localFile(context, "books/$assetName").takeIf { it.isFile }
+            } else {
+                null
+            }
+            val file = local ?: if (documentUri == null) cacheAsset(context, dir, "books/$assetName") else null
             val pdf = if (documentUri == null) renderer(checkNotNull(file)) else renderer(context, documentUri)
             return try {
                 val count = pdf.pageCount

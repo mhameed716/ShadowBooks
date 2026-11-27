@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shadowbooks.R
 
-internal enum class HomeTab { Library, StudyResources, Timetable, DevicePdfs }
+internal enum class HomeTab { Library, StudyResources, Timetable, DevicePdfs, Store }
 
 private val NavBackground = Color(0xFF081322)
 private val NavActive = Color(0xFF65D4FA)
@@ -45,14 +46,16 @@ internal fun HomeBottomNavigation(
     onStudyResources: () -> Unit,
     onTimetable: () -> Unit,
     onDevicePdfs: () -> Unit,
+    onStore: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().background(NavBackground)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF26374A)))
         Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
-            // RTL placement: timetable on the right; device PDFs are the fourth tab at the far left.
+            // RTL placement: timetable on the right; device PDFs are the last tab at the far left.
             NavItem("جدول الحصص", selected == HomeTab.Timetable, Icons.Filled.CalendarToday, onTimetable)
             NavItem("المكتبة", selected == HomeTab.Library, Icons.Filled.MenuBook, onLibrary)
             NavItem("ملخصات واختبارات", selected == HomeTab.StudyResources, Icons.Filled.Description, onStudyResources)
+            NavItem("المتجر", selected == HomeTab.Store, Icons.Filled.Storefront, onStore)
             NavItem("ملفات الهاتف", selected == HomeTab.DevicePdfs, Icons.Filled.FolderOpen, onDevicePdfs)
         }
     }

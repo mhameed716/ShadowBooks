@@ -44,10 +44,13 @@ jobs:
       - name: Install Android 35 SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Prepare textbooks, study PDFs, and Quran audio for the full build
+      # Light app: only the pupil translation and Quran recitations stay bundled.
+      # Textbooks and study PDFs are published separately by publish-store.yml.
+      - name: Prepare bundled assets (pupil translation and Quran audio)
         if: env.FULL_BOOKS == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          ASSET_MODE: light
         run: bash scripts/download_books.sh
 
       # The permanent signing key lives in the repo only encrypted. Without this one
@@ -106,9 +109,9 @@ jobs:
           SHADOWBOOKS_KEY_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
         run: bash ./gradlew --no-daemon :app:testReleaseUnitTest :app:assembleRelease
 
-      - name: Verify packaged study PDFs
+      - name: Verify the light APK bundles no store content
         if: env.FULL_BOOKS == 'true'
-        run: python3 scripts/verify_study_assets.py --apk app/build/outputs/apk/release/app-release.apk
+        run: python3 scripts/verify_light_apk.py --apk app/build/outputs/apk/release/app-release.apk
 
       - name: Verify packaged pupil translation and report actual sizes
         if: env.FULL_BOOKS == 'true'
@@ -166,7 +169,7 @@ jobs:
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/ShadowBooks.apk"
           cp downloader/build/outputs/apk/release/downloader-release.apk "$RUNNER_TEMP/ShadowBooks-Downloader.apk"
-          release_notes="Recommended: install ShadowBooks-Downloader.apk first (tiny), open it, and let it download ShadowBooks for you. The downloader runs as a foreground service with parallel connections (much faster), resumes automatically if the network drops or the phone restarts, verifies the file, and saves ShadowBooks.apk into your phone's Downloads folder, ready to install. Note: this signed release cannot update older debug-signed copies in place; uninstall the old ShadowBooks once, then install this one. Every future update will install over it normally. Advanced users may still download ShadowBooks.apk directly. Full offline contents: 15 textbooks, summaries, exam models and question banks, Quran recitation, scientific calculator, and class timetable."
+          release_notes="Recommended: install ShadowBooks-Downloader.apk first (tiny), open it, and let it download ShadowBooks for you. The downloader runs as a foreground service with parallel connections (much faster), resumes automatically if the network drops or the phone restarts, verifies the file, and saves ShadowBooks.apk into your phone's Downloads folder, ready to install. New in this version: the app itself is now light (~100 MB). Textbooks, summaries, and exam files moved into the built-in Store tab: download each book or file on its own (resumable, integrity-verified) and it lands in its exact place in the library or study sections, ready to read offline. Quran recitation, the English translation companion, the scientific calculator, and the class timetable remain built in. Note: content that used to be bundled must be downloaded once from the Store after updating; pick only what you need."
           if gh release view v1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit v1.0 --repo "$GITHUB_REPOSITORY" --title "ShadowBooks 1.0" --notes "$release_notes"
             gh release upload v1.0 "$RUNNER_TEMP/ShadowBooks.apk" "$RUNNER_TEMP/ShadowBooks-Downloader.apk" --clobber --repo "$GITHUB_REPOSITORY"

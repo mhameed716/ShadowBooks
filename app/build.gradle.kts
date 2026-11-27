@@ -4,7 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val generatedStudyAssets = layout.buildDirectory.dir("generated/study-assets")
+// Only the pupil translation and Quran recitations stay bundled with the app;
+// textbooks and study PDFs are delivered by the in-app store (see store/).
+val generatedBundledAssets = layout.buildDirectory.dir("generated/bundled-assets")
 
 android {
     namespace = "com.shadowbooks"
@@ -14,7 +16,7 @@ android {
         applicationId = "com.shadowbooks"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
+        versionCode = 3
         versionName = "1.0"
         manifestPlaceholders["appLabel"] = "ShadowBooks"
     }
@@ -60,12 +62,13 @@ android {
     }
 
     sourceSets {
-        // The trial stays lightweight. Full variants package downloaded assets from the ignored build directory.
+        // The trial stays lightweight. Full variants bundle only the assets that
+        // scripts/download_books.sh (ASSET_MODE=light) assembles: the pupil
+        // translation pair and both Quran recitations. Everything else — all
+        // textbooks and study PDFs — is delivered by the in-app store.
         getByName("main").assets.setSrcDirs(listOf("src/shared/assets"))
-        getByName("debug").assets.srcDir("src/main/assets")
-        getByName("debug").assets.srcDir(generatedStudyAssets)
-        getByName("release").assets.srcDir("src/main/assets")
-        getByName("release").assets.srcDir(generatedStudyAssets)
+        getByName("debug").assets.srcDir(generatedBundledAssets)
+        getByName("release").assets.srcDir(generatedBundledAssets)
         // src/trial/assets provides the small sample; shared assets remain available to every variant.
     }
 

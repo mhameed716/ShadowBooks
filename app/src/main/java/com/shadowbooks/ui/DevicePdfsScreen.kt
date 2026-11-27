@@ -68,6 +68,7 @@ fun DevicePdfsScreen(
     onLibrary: () -> Unit,
     onStudyResources: () -> Unit,
     onTimetable: () -> Unit,
+    onStore: () -> Unit,
     onOpen: (BookVolume) -> Unit,
 ) {
     val context = LocalContext.current
@@ -218,6 +219,7 @@ fun DevicePdfsScreen(
             onStudyResources = onStudyResources,
             onTimetable = onTimetable,
             onDevicePdfs = {},
+            onStore = onStore,
         )
     }
 }

@@ -53,6 +53,7 @@ import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.StudyMaterialCatalog
 import com.shadowbooks.data.StudyMaterialFile
 import com.shadowbooks.data.StudyMaterialKind
+import com.shadowbooks.store.StoreContent
 
 private val StudyNight = Color(0xFF071326)
 private val StudyCard = Color(0xFF101E32)
@@ -80,20 +81,27 @@ fun StudyResourcesScreen(
     onLibrary: () -> Unit,
     onTimetable: () -> Unit,
     onDevicePdfs: () -> Unit,
+    onOpenStore: () -> Unit,
     onOpen: (BookVolume) -> Unit,
 ) {
     val context = LocalContext.current
-    val goldenUnits = remember(context) {
-        StudyMaterialCatalog.goldenEnglishUnits(
-            context.assets.list("books/${StudyMaterialCatalog.GOLDEN_ENGLISH_PATH}")?.toList().orEmpty(),
-        )
+    // Study files now arrive through the store; lists merge packaged assets
+    // (trial sample only) with everything downloaded into the content folder.
+    val installedVersion = StoreContent.installedVersion
+    val goldenUnits = remember(context, installedVersion) {
+        val names = (
+            context.assets.list("books/${StudyMaterialCatalog.GOLDEN_ENGLISH_PATH}")?.toList().orEmpty() +
+                StoreContent.localFileNames(context, "books/${StudyMaterialCatalog.GOLDEN_ENGLISH_PATH}")
+            ).distinct()
+        StudyMaterialCatalog.goldenEnglishUnits(names)
     }
-    val materials = remember(context, goldenUnits) {
+    val materials = remember(context, goldenUnits, installedVersion) {
         StudyMaterialKind.values().associateWith { kind ->
-            val files = StudyMaterialCatalog.fromAssetNames(
-                kind,
-                context.assets.list("books/study/${kind.folder}")?.toList().orEmpty(),
-            )
+            val names = (
+                context.assets.list("books/study/${kind.folder}")?.toList().orEmpty() +
+                    StoreContent.localFileNames(context, "books/study/${kind.folder}")
+                ).distinct()
+            val files = StudyMaterialCatalog.fromAssetNames(kind, names)
             val group = if (kind == StudyMaterialKind.Summary) StudyMaterialCatalog.goldenEnglishGroup(goldenUnits) else null
             (files + listOfNotNull(group)).groupBy(StudyMaterialFile::bookNumber)
         }
@@ -215,7 +223,8 @@ fun StudyResourcesScreen(
             val count = bySubject.values.sumOf { it.size }
             if (count == 0) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        .clickable(role = Role.Button, onClick = onOpenStore),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF12253B)),
                 ) {
@@ -258,6 +267,7 @@ fun StudyResourcesScreen(
             onStudyResources = {},
             onTimetable = onTimetable,
             onDevicePdfs = onDevicePdfs,
+            onStore = onOpenStore,
         )
     }
 
