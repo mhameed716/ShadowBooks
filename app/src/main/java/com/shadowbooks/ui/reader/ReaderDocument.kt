@@ -108,10 +108,16 @@ internal class ReaderDocument private constructor(
             return try { PdfRenderer(fd) } catch (e: Exception) { fd.close(); throw e }
         }
 
-        private fun translation(context: Context, dir: File, original: File, count: Int): CompanionPdf? {
+        private fun translation(
+            context: Context,
+            dir: File,
+            original: File,
+            count: Int,
+            companion: PreparedPupilBook.Companion,
+        ): CompanionPdf? {
             // Failure of an optional companion must never prevent reading the original.
             return try {
-                val index = context.assets.open(PreparedPupilBook.INDEX).bufferedReader(Charsets.UTF_8).use {
+                val index = context.assets.open(companion.index).bufferedReader(Charsets.UTF_8).use {
                     JSONObject(it.readText())
                 }
                 require(index.getInt("version") == 1)
@@ -120,9 +126,10 @@ internal class ReaderDocument private constructor(
                     index.getString("sourceSha256"),
                     index.getString("arabicSha256"),
                     List(pages.length()) { i -> if (pages.isNull(i)) null else pages.get(i) as String },
+                    companion.originalOnly,
                 )
                 if (!book.matches(PreparedPupilBook.digest(original), count)) return null
-                val file = cacheAsset(context, dir, PreparedPupilBook.PDF)
+                val file = cacheAsset(context, dir, companion.pdf)
                 if (PreparedPupilBook.digest(file) != book.arabicSha256) {
                     file.delete() // Retry the installed asset rather than a bad cache entry next time.
                     return null
@@ -174,7 +181,17 @@ internal class ReaderDocument private constructor(
                 val count = pdf.pageCount
                 require(count > 0)
                 val aspect = try { pdf.openPage(0).use { it.width.toFloat() / it.height } } catch (e: Exception) { 0.707f }
-                ReaderDocument(pdf, if (candidate) translation(context, dir, checkNotNull(file), count) else null, count, aspect)
+                val companion = if (candidate) PreparedPupilBook.companionFor(volume.fileName) else null
+                ReaderDocument(
+                    pdf,
+                    if (companion != null) {
+                        translation(context, dir, checkNotNull(file), count, companion)
+                    } else {
+                        null
+                    },
+                    count,
+                    aspect,
+                )
             } catch (e: Exception) { pdf.close(); throw e }
         }
     }

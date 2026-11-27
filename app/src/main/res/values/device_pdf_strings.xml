@@ -3,7 +3,8 @@
     <string name="device_pdf_title">ملفات الهاتف</string>
     <string name="device_pdf_subtitle">افتح ملفات PDF المحفوظة على جهازك</string>
     <string name="device_pdf_pick">اختيار ملفات PDF</string>
-    <string name="device_pdf_permission_note">سيظهر منتقي ملفات أندرويد. اختر ملفًا أو أكثر، وسيقتصر إذن القراءة على الملفات التي تحددها فقط؛ لا يحتاج التطبيق إلى صلاحية عامة لقراءة التخزين.</string>
+    <string name="device_pdf_permission_note">امنح التطبيق إذن الوصول إلى الملفات ليعرض كل ملفات PDF في هاتفك هنا بأغلفتها، أو اختر ملفات بنفسك من منتقي ملفات أندرويد وسيقتصر الإذن عليها فقط.</string>
+    <string name="device_pdf_grant">منح إذن الوصول إلى ملفات الهاتف</string>
     <string name="device_pdf_empty">لم تضف ملفات بعد. اختر ملفات PDF من هاتفك لتظهر هنا وتُفتح في قارئ التطبيق.</string>
     <string name="device_pdf_count">ملفاتك المضافة: %1$d</string>
     <string name="device_pdf_added">تمت إضافة %1$d ملف إلى القائمة.</string>

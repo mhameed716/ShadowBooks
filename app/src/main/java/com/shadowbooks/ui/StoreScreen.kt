@@ -568,7 +568,11 @@ fun StoreScreen(
                             val visible = (if (downloadedMode) {
                                 rows.filter { StoreContent.isInstalled(context, it.second) }
                             } else {
-                                rows
+                                // Once a book is on the device it leaves the
+                                // shop window; it lives in «المحمّلة» now.
+                                rows.filterNot {
+                                    StoreContent.localFile(context, it.second.dest).isFile
+                                }
                             }).sortedByDescending {
                                 Favorites.isFavorite(it.second.dest)
                             }
@@ -642,7 +646,9 @@ fun StoreScreen(
                                     StoreContent.isInstalled(context, it.second)
                                 }
                             } else {
-                                studySection.rows
+                                studySection.rows.filterNot {
+                                    StoreContent.localFile(context, it.second.dest).isFile
+                                }
                             }).sortedByDescending {
                                 Favorites.isFavorite(it.second.dest)
                             }

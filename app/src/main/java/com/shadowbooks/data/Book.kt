@@ -48,7 +48,7 @@ object BookCatalog {
             fileName = "english-student-book.pdf",
             coverRes = R.drawable.library_cover_english,
             volumes = listOf(
-                BookVolume("اللغة الإنجليزية — كتاب الطالب", "english-student-book.pdf", "الكتاب المدرسي"),
+                BookVolume("اللغة الإنجليزية — كتاب المدرسة", "english-student-book.pdf", "الكتاب المدرسي"),
                 BookVolume("اللغة الإنجليزية — كتاب الواجب", "english-workbook.pdf", "الواجبات والتدريبات"),
             ),
         ),

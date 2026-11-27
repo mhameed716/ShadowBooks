@@ -72,8 +72,8 @@ fun SpinningGearButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
         animationSpec = infiniteRepeatable(
             animation = keyframes {
                 durationMillis = 4000
-                0f at 0 using LinearEasing
-                360f at 3000 using LinearEasing
+                0f at 0 with LinearEasing
+                360f at 3000 with LinearEasing
                 360f at 4000
             },
         ),
