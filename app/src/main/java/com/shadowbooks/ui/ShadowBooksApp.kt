@@ -3,6 +3,7 @@ package com.shadowbooks.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -16,6 +17,7 @@ import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.StudyMaterialKind
+import com.shadowbooks.store.PackImportRequest
 import com.shadowbooks.store.StoreContent
 
 private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader, Store }
@@ -43,6 +45,18 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     var storeSection by rememberSaveable { mutableIntStateOf(STORE_SECTION_LIBRARY) }
     val context = LocalContext.current
     val libraryScroll = rememberLazyListState()
+
+    // A library pack opened from outside goes to the store for import — after
+    // the welcome screen, never instead of it.
+    val pendingPackUri = PackImportRequest.pendingUri
+    LaunchedEffect(pendingPackUri, destination) {
+        if (pendingPackUri != null &&
+            destination != AppDestination.Welcome &&
+            destination != AppDestination.Store
+        ) {
+            destination = AppDestination.Store
+        }
+    }
     val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
     val bookVolume = book?.availableVolumes()?.find { it.fileName == volumeFile }
     val readerVolume = when {

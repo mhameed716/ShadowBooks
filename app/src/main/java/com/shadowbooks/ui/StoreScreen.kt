@@ -1,9 +1,12 @@
 package com.shadowbooks.ui
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,9 +42,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,11 +67,15 @@ import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.StudyMaterialCatalog
 import com.shadowbooks.data.StudyMaterialFile
 import com.shadowbooks.data.StudyMaterialKind
+import com.shadowbooks.store.LibraryPack
+import com.shadowbooks.store.PackImportRequest
 import com.shadowbooks.store.StoreContent
 import com.shadowbooks.store.StoreDownloadState
 import com.shadowbooks.store.StoreDownloader
 import com.shadowbooks.store.StoreEntry
+import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private val StoreNight = Color(0xFF071326)
 private val StoreCard = Color(0xFF101E32)
@@ -124,11 +134,98 @@ fun StoreScreen(
         refreshing = false
     }
 
-    val entriesByDest = remember(catalog) { catalog.associateBy(StoreEntry::dest) }
+    // Library-pack export/import ("send my downloaded files" to a friend).
+    val scope = rememberCoroutineScope()
+    var packBusy by remember { mutableStateOf(false) }
+    var packProgress by remember { mutableFloatStateOf(0f) }
+    var packDialog by remember { mutableStateOf<String?>(null) }
+    var exportedPack by remember { mutableStateOf<File?>(null) }
+
+    fun sharePack(file: File) {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file,
+        )
+        val intent = Intent(Intent.ACTION_SEND)
+            .setType("application/zip")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(intent, "إرسال ملفات ShadowBooks"))
+    }
+
+    fun startImport(uri: Uri) {
+        if (packBusy) return
+        packBusy = true
+        packProgress = 0f
+        scope.launch {
+            try {
+                val result = LibraryPack.import(context, uri) { packProgress = it }
+                packDialog = buildString {
+                    append("تم الاستيراد: ${result.imported} ملف جديد")
+                    if (result.skipped > 0) append("، و${result.skipped} موجودة لديك أصلًا")
+                    if (result.failed > 0) append("، وتعذّر استيراد ${result.failed} ملف")
+                    append(". تجدها الآن في أماكنها بالمكتبة والملخصات والاختبارات.")
+                }
+            } catch (e: Exception) {
+                packDialog = e.message ?: "تعذّر استيراد الحزمة."
+            } finally {
+                packBusy = false
+            }
+        }
+    }
+
+    fun startExport() {
+        if (packBusy) return
+        packBusy = true
+        packProgress = 0f
+        scope.launch {
+            try {
+                val result = LibraryPack.export(context) { packProgress = it }
+                exportedPack = result.file
+                packDialog = "تم تجهيز حزمة مكتبتك: ${result.count} ملف " +
+                    "(${formatStoreSize(result.bytes)})." +
+                    if (result.savedToDownloads) {
+                        " حُفظت نسخة منها في مجلد التنزيلات باسم " +
+                            "${LibraryPack.PACK_FILE_NAME} لإعادة إرسالها في أي وقت."
+                    } else {
+                        ""
+                    }
+            } catch (e: Exception) {
+                packDialog = e.message ?: "تعذّر تجهيز الحزمة."
+            } finally {
+                packBusy = false
+            }
+        }
+    }
+
+    val importPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) startImport(uri) }
+
+    // A pack opened from a file manager ("open with ShadowBooks") lands here.
+    val pendingPackUri = PackImportRequest.pendingUri
+    LaunchedEffect(pendingPackUri) {
+        if (pendingPackUri != null) {
+            PackImportRequest.pendingUri = null
+            downloadedMode = true
+            startImport(Uri.parse(pendingPackUri))
+        }
+    }
+
+    // On-disk files (including freshly imported ones) must list even before
+    // the catalog is known; the catalog overrides them whenever available.
+    val diskEntries = remember(installedVersion) { StoreContent.downloadedEntries(context) }
+    val entriesByDest = remember(catalog, diskEntries) {
+        buildMap {
+            diskEntries.forEach { put(it.dest, it) }
+            catalog.forEach { put(it.dest, it) }
+        }
+    }
 
     fun studyMaterials(kind: StudyMaterialKind): Map<Int, List<StudyMaterialFile>> {
         val prefix = "books/study/${kind.folder}/"
-        val names = catalog.map(StoreEntry::dest)
+        val names = entriesByDest.keys
             .filter { it.startsWith(prefix) }
             .map { it.removePrefix(prefix) }
             .filter { '/' !in it }
@@ -136,7 +233,7 @@ fun StoreScreen(
         val golden = if (kind == StudyMaterialKind.Summary) {
             val goldenPrefix = "books/${StudyMaterialCatalog.GOLDEN_ENGLISH_PATH}/"
             val units = StudyMaterialCatalog.goldenEnglishUnits(
-                catalog.map(StoreEntry::dest)
+                entriesByDest.keys
                     .filter { it.startsWith(goldenPrefix) }
                     .map { it.removePrefix(goldenPrefix) },
             )
@@ -189,7 +286,7 @@ fun StoreScreen(
     fun goldenUnits(): List<StudyMaterialFile> {
         val goldenPrefix = "books/${StudyMaterialCatalog.GOLDEN_ENGLISH_PATH}/"
         return StudyMaterialCatalog.goldenEnglishUnits(
-            catalog.map(StoreEntry::dest)
+            entriesByDest.keys
                 .filter { it.startsWith(goldenPrefix) }
                 .map { it.removePrefix(goldenPrefix) },
         )
@@ -242,7 +339,91 @@ fun StoreScreen(
                 }
             }
 
-            if (catalog.isEmpty() && !refreshing) {
+            if (downloadedMode) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    StoreChip("إرسال ملفاتي", false, Modifier.weight(1f)) {
+                        if (!packBusy) startExport()
+                    }
+                    StoreChip("استيراد ملفات", false, Modifier.weight(1f)) {
+                        if (!packBusy) importPicker.launch(arrayOf("*/*"))
+                    }
+                }
+            }
+
+            if (packBusy) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    containerColor = StoreCard,
+                    title = {
+                        Text(
+                            "جارٍ العمل على الحزمة...",
+                            color = Color.White,
+                            fontFamily = StoreFont,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    },
+                    text = {
+                        Column {
+                            LinearProgressIndicator(
+                                progress = { packProgress },
+                                color = StoreCyan,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                "${(packProgress * 100).toInt()}٪",
+                                color = StoreMuted,
+                                fontFamily = StoreFont,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
+
+            packDialog?.let { message ->
+                AlertDialog(
+                    onDismissRequest = { packDialog = null; exportedPack = null },
+                    containerColor = StoreCard,
+                    title = {
+                        Text(
+                            "مكتبة ShadowBooks",
+                            color = Color.White,
+                            fontFamily = StoreFont,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    },
+                    text = {
+                        Text(
+                            message,
+                            color = StoreMuted,
+                            fontFamily = StoreFont,
+                            fontSize = 14.sp,
+                        )
+                    },
+                    confirmButton = {
+                        if (exportedPack != null) {
+                            TextButton(onClick = {
+                                val file = exportedPack
+                                packDialog = null
+                                exportedPack = null
+                                if (file != null) sharePack(file)
+                            }) {
+                                Text("إرسال الآن", color = StoreCyan, fontFamily = StoreFont)
+                            }
+                        }
+                        TextButton(onClick = { packDialog = null; exportedPack = null }) {
+                            Text("حسنًا", color = StoreCyan, fontFamily = StoreFont)
+                        }
+                    },
+                )
+            }
+
+            if (catalog.isEmpty() && diskEntries.isEmpty() && !refreshing) {
                 Text(
                     if (refreshFailed) "تعذر تحديث القائمة. تحقق من الاتصال ثم أعد المحاولة."
                     else "لا توجد ملفات متاحة بعد.",
