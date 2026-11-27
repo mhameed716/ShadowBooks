@@ -51,7 +51,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Foreground-service downloader for the large ShadowBooks APK.
+ * Foreground-service downloader for the ShadowBooks APK.
  *
  * Why a service: the download must survive the activity being closed, the screen
  * sleeping, the network dropping, and even the phone restarting. The file is fetched

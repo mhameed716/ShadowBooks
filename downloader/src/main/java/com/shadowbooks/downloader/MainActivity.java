@@ -68,7 +68,7 @@ public final class MainActivity extends Activity {
         layout.addView(title, matchWrap(0));
 
         TextView intro = new TextView(this);
-        intro.setText("هذا المنزّل الصغير يحمّل تطبيق ShadowBooks الكبير بسرعة عالية "
+        intro.setText("هذا المنزّل الصغير يحمّل تطبيق ShadowBooks بسرعة عالية "
                 + "بواسطة عدة اتصالات متوازية، ويعمل في الخلفية حتى لو أُغلقت الشاشة. "
                 + "إذا انقطع الإنترنت أو أُعيد تشغيل الهاتف، يُستأنف التنزيل تلقائيًا "
                 + "من حيث توقف دون البدء من الصفر. وعند الاكتمال يُحفظ التطبيق "
@@ -105,8 +105,9 @@ public final class MainActivity extends Activity {
         layout.addView(deleteButton, matchWrap(dp(8)));
 
         TextView note = new TextView(this);
-        note.setText("حجم التطبيق الكامل نحو 940 ميغابايت. اترك مساحة كافية على الهاتف، "
-                + "ويفضل استخدام شبكة Wi-Fi مستقرة.");
+        note.setText("حجم التطبيق نحو 120 ميغابايت، وبعد تثبيته يمكنك تنزيل الكتب "
+                + "والملخصات والنماذج التي تحتاجها فقط من تبويب «المتجر» داخله. "
+                + "اترك مساحة كافية على الهاتف، ويفضل استخدام شبكة Wi-Fi مستقرة.");
         note.setTextSize(14);
         note.setGravity(Gravity.CENTER);
         layout.addView(note, matchWrap(dp(22)));
