@@ -3,6 +3,17 @@ package com.shadowbooks.ui.reader
 import java.io.File
 import java.security.MessageDigest
 
+/** Zero-based PDF indices kept from the original pupil edition (already Arabic/blank). */
+private val PUPIL_ORIGINAL_ONLY = setOf(1, 2, 4, 54, 68, 80)
+
+/** One prepared translation pair per English volume, when present in the APK. */
+internal data class PreparedBookSpec(
+    val sourceFile: String,
+    val pdf: String,
+    val index: String,
+    val originalOnly: Set<Int>,
+)
+
 /**
  * A prepared Arabic companion for one English volume: an index JSON (the
  * clean per-page Arabic text) paired with a typeset Arabic PDF whose pages
@@ -13,7 +24,7 @@ internal class PreparedPupilBook(
     private val sourceSha256: String,
     val arabicSha256: String,
     private val pages: List<String?>,
-    private val originalOnly: Set<Int>,
+    private val originalOnly: Set<Int> = PUPIL_ORIGINAL_ONLY,
 ) {
     init {
         val sha256 = Regex("[0-9a-f]{64}")
@@ -37,20 +48,9 @@ internal class PreparedPupilBook(
         const val PDF = "reviewed/pupil6-ar.pdf"
         const val INDEX = "reviewed/pupil6-ar.json"
 
-        /** Zero-based PDF indices kept from the original pupil edition. */
-        private val PUPIL_ORIGINAL_ONLY = setOf(1, 2, 4, 54, 68, 80)
-
-        /** One prepared translation pair per English volume, when present in the APK. */
-        internal data class Spec(
-            val sourceFile: String,
-            val pdf: String,
-            val index: String,
-            val originalOnly: Set<Int>,
-        )
-
         internal val COMPANIONS = listOf(
-            Spec(SOURCE, PDF, INDEX, PUPIL_ORIGINAL_ONLY),
-            Spec(
+            PreparedBookSpec(SOURCE, PDF, INDEX, PUPIL_ORIGINAL_ONLY),
+            PreparedBookSpec(
                 "english-workbook.pdf",
                 "reviewed/workbook6-ar.pdf",
                 "reviewed/workbook6-ar.json",
@@ -61,7 +61,7 @@ internal class PreparedPupilBook(
         fun isCandidate(fileName: String, trial: Boolean) =
             !trial && COMPANIONS.any { it.sourceFile == fileName }
 
-        fun companionFor(fileName: String): Spec? =
+        fun companionFor(fileName: String): PreparedBookSpec? =
             COMPANIONS.firstOrNull { it.sourceFile == fileName }
 
         fun digest(file: File): String {
