@@ -29,6 +29,8 @@ internal class PreparedPupilBook(
     init {
         val sha256 = Regex("[0-9a-f]{64}")
         require(sourceSha256.matches(sha256) && arabicSha256.matches(sha256))
+        // An index shorter than its own retained-page set is incomplete.
+        require(pages.size > (originalOnly.maxOrNull() ?: -1))
         require(pages.isNotEmpty() && pages.indices.all { index ->
             if (index in originalOnly) pages[index] == null else !pages[index].isNullOrBlank()
         })

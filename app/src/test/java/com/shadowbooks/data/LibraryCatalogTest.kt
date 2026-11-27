@@ -24,7 +24,12 @@ class LibraryCatalogTest {
 
     @Test fun onlyFullStudentVolumeIsAPreparedTranslationCandidate() {
         val files = BookCatalog.books.flatMap { b -> b.volumes.map { it.fileName }.ifEmpty { listOf(b.fileName) } }
-        assertEquals(listOf("english-student-book.pdf"), files.filter { PreparedPupilBook.isCandidate(it, trial = false) })
+        // Both English volumes are companion candidates; the workbook simply
+        // stays original-only until its Arabic pair ships in the APK.
+        assertEquals(
+            listOf("english-student-book.pdf", "english-workbook.pdf"),
+            files.filter { PreparedPupilBook.isCandidate(it, trial = false) },
+        )
         assertEquals(emptyList<String>(), files.filter { PreparedPupilBook.isCandidate(it, trial = true) })
         assertEquals(false, PreparedPupilBook.isCandidate("reader-sample.pdf", trial = false))
     }
