@@ -113,7 +113,7 @@ internal class ReaderDocument private constructor(
             dir: File,
             original: File,
             count: Int,
-            companion: PreparedPupilBook.Spec,
+            companion: PreparedBookSpec,
         ): CompanionPdf? {
             // Failure of an optional companion must never prevent reading the original.
             return try {
