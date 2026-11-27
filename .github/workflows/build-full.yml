@@ -1,0 +1,120 @@
+name: Build ShadowBooks Full Edition
+
+# The complete edition: all textbooks, summaries and exam files bundled
+# INSIDE the app (~978 MB), fully offline. It lives on its own fixed release
+# (tag "full") so the light edition (v1.0, ~120 MB + in-app store) can never
+# replace it, and it is signed with the same permanent key, so it installs
+# over the light edition and vice versa.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-full:
+    # Ordinary pushes stay quiet; a merge whose message carries [full-apk]
+    # (or a manual dispatch) builds the full edition.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[full-apk]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Install Android 35 SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Collect ALL content (textbooks, study PDFs, Quran audio)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ASSET_MODE: full
+        run: bash scripts/download_books.sh
+
+      - name: Decrypt the permanent signing key
+        env:
+          SHADOWBOOKS_SIGNING_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SHADOWBOOKS_SIGNING_PASSWORD:-}" ]; then
+            echo "::error::Missing GitHub secret SHADOWBOOKS_SIGNING_PASSWORD."
+            exit 1
+          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 \
+            -in keystore/shadowbooks-release.p12.enc \
+            -out "$RUNNER_TEMP/shadowbooks-release.p12" \
+            -pass env:SHADOWBOOKS_SIGNING_PASSWORD
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the full release APK
+        env:
+          SHADOWBOOKS_KEYSTORE_FILE: ${{ runner.temp }}/shadowbooks-release.p12
+          SHADOWBOOKS_KEYSTORE_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+          SHADOWBOOKS_KEY_ALIAS: shadowbooks
+          SHADOWBOOKS_KEY_PASSWORD: ${{ secrets.SHADOWBOOKS_SIGNING_PASSWORD }}
+        run: bash ./gradlew --no-daemon :app:testReleaseUnitTest :app:assembleRelease
+
+      - name: Verify the full APK really contains the books
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_prepared_book.py --apk app/build/outputs/apk/release/app-release.apk | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 scripts/verify_quran_audio.py --apk app/build/outputs/apk/release/app-release.apk | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          from zipfile import ZipFile
+          with ZipFile("app/build/outputs/apk/release/app-release.apk") as apk:
+              names = apk.namelist()
+          books = sorted(n for n in names if n.startswith("assets/books/") and n.endswith(".pdf"))
+          top = [n for n in books if n.count("/") == 2]
+          study = [n for n in books if n.startswith("assets/books/study/")]
+          print(f"Full APK bundles {len(books)} content PDFs: {len(top)} textbooks, {len(study)} study files.")
+          if len(top) != 15:
+              raise SystemExit(f"ERROR: expected 15 textbooks inside the full APK, found {len(top)}: {top}")
+          if len(study) < 40:
+              raise SystemExit(f"ERROR: suspiciously few study PDFs inside the full APK: {len(study)}")
+          PY
+
+      - name: Verify release signature and non-debuggable packaging
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release.apk
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose --print-certs "$apk" | tee -a "$GITHUB_STEP_SUMMARY"
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/full-badging.txt"
+          grep "^package: name='com.shadowbooks'" "$RUNNER_TEMP/full-badging.txt"
+          if grep -q "application-debuggable" "$RUNNER_TEMP/full-badging.txt"; then
+            echo "::error::Release APK is debuggable; refusing to publish it."
+            exit 1
+          fi
+
+      # Own fixed release, separate from v1.0 forever: the light edition's
+      # publishing can never overwrite the complete app again.
+      - name: Publish the full edition to its own release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/ShadowBooks-Full.apk"
+          notes="The COMPLETE ShadowBooks edition (~978 MB): every textbook, summary, ministry model and exam file bundled inside the app, working fully offline — nothing to download from the Store. Same app, same permanent signature: it installs over the light edition and receives the same library-sharing features. Prefer the light edition (~120 MB, download only what you need from the built-in Store)? Use the v1.0 release instead; both stay available and neither replaces the other."
+          if gh release view full --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit full --repo "$GITHUB_REPOSITORY" --title "ShadowBooks — Complete Edition (all books inside)" --notes "$notes"
+            gh release upload full "$RUNNER_TEMP/ShadowBooks-Full.apk" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create full "$RUNNER_TEMP/ShadowBooks-Full.apk" --repo "$GITHUB_REPOSITORY" \
+              --title "ShadowBooks — Complete Edition (all books inside)" \
+              --notes "$notes"
+          fi
+          ls -la "$RUNNER_TEMP/ShadowBooks-Full.apk" | tee -a "$GITHUB_STEP_SUMMARY"

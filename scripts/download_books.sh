@@ -392,4 +392,23 @@ if [[ "$pdf_count" != "15" ]]; then
   exit 1
 fi
 
+# Assemble the FULL bundled assets (the light edition assembles its small
+# subset earlier and exits before this point): every textbook, study PDF,
+# the reviewed translation pair, the font license and both recitations, in
+# exactly the asset layout the app has always used. Gradle packages only
+# this directory, so the full edition is the same app — with all content
+# inside, working fully offline and never needing the store.
+BUNDLED="$ROOT_DIR/app/build/generated/bundled-assets"
+rm -rf "$BUNDLED"
+mkdir -p "$BUNDLED/books" "$BUNDLED/reviewed" "$BUNDLED/licenses"
+cp -r "$BOOKS_DIR/." "$BUNDLED/books/"
+if [[ -d "$ROOT_DIR/app/build/generated/study-assets/books/study" ]]; then
+  mkdir -p "$BUNDLED/books/study"
+  cp -r "$ROOT_DIR/app/build/generated/study-assets/books/study/." "$BUNDLED/books/study/"
+fi
+cp "$ROOT_DIR/app/src/main/assets/reviewed/pupil6-ar.json" "$BUNDLED/reviewed/"
+cp "$ROOT_DIR/app/build/generated/study-assets/reviewed/pupil6-ar.pdf" "$BUNDLED/reviewed/"
+cp "$ROOT_DIR/app/src/main/assets/licenses/Noto-Naskh-OFL.txt" "$BUNDLED/licenses/"
+echo "Full bundled assets ready: $(find "$BUNDLED" -type f | wc -l | tr -d ' ') files."
+
 echo "All 15 textbooks, 20 generated study PDFs, the reviewed PDF, both Quran recitations, and the Arabic exam PDFs are ready for the full build."
