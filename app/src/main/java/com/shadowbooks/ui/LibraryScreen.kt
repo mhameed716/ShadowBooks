@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +28,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -36,6 +40,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -52,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.shadowbooks.R
 import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
+import com.shadowbooks.store.StoreContent
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -78,7 +85,17 @@ fun LibraryScreen(
     onOpenStudyResources: () -> Unit,
     onOpenTimetable: () -> Unit,
     onOpenDevicePdfs: () -> Unit,
+    onOpenStore: () -> Unit,
 ) {
+    val context = LocalContext.current
+    // Refresh shelf badges when store downloads land.
+    val installedVersion = StoreContent.installedVersion
+    val undownloaded = remember(context, installedVersion) {
+        BookCatalog.books
+            .filterNot { StoreContent.isBookDownloaded(context, it) }
+            .map { it.number }
+            .toSet()
+    }
     val shelves = remember { BookCatalog.books.chunked(3) }
     val count = remember {
         NumberFormat.getIntegerInstance(Locale.forLanguageTag("ar-YE-u-nu-arab")).format(BookCatalog.books.size.toLong())
@@ -106,7 +123,7 @@ fun LibraryScreen(
                         item(key = "library-header") { LibraryHeader(unit, count) }
                     }
                     itemsIndexed(shelves, key = { _, books -> books.first().number }) { index, books ->
-                        ShelfRow(unit, ShelfTextures[index % ShelfTextures.size], books, onSelectBook)
+                        ShelfRow(unit, ShelfTextures[index % ShelfTextures.size], books, undownloaded, onSelectBook)
                     }
                 }
             }
@@ -116,6 +133,7 @@ fun LibraryScreen(
                 onStudyResources = onOpenStudyResources,
                 onTimetable = onOpenTimetable,
                 onDevicePdfs = onOpenDevicePdfs,
+                onStore = onOpenStore,
             )
         }
     }
@@ -167,7 +185,13 @@ private fun LibraryHeader(unit: Dp, count: String) {
 }
 
 @Composable
-private fun ShelfRow(unit: Dp, @DrawableRes texture: Int, books: List<Book>, onSelectBook: (Book) -> Unit) {
+private fun ShelfRow(
+    unit: Dp,
+    @DrawableRes texture: Int,
+    books: List<Book>,
+    undownloaded: Set<Int>,
+    onSelectBook: (Book) -> Unit,
+) {
     val shelf = painterResource(texture)
     Box(Modifier.fillMaxWidth().aspectRatio(shelf.artAspect)) {
         Image(shelf, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
@@ -180,11 +204,27 @@ private fun ShelfRow(unit: Dp, @DrawableRes texture: Int, books: List<Book>, onS
             books.forEach { book ->
                 val cover = painterResource(book.coverRes)
                 val action = if (book.volumes.size > 1) R.string.library_choose_volume else R.string.library_open_book
-                Image(
-                    painter = cover, contentDescription = book.title, contentScale = ContentScale.FillBounds,
-                    modifier = Modifier.width(unit * CoverWidth).aspectRatio(cover.artAspect).clipToBounds()
-                        .clickable(role = Role.Button, onClickLabel = stringResource(action)) { onSelectBook(book) },
-                )
+                Box {
+                    Image(
+                        painter = cover, contentDescription = book.title, contentScale = ContentScale.FillBounds,
+                        modifier = Modifier.width(unit * CoverWidth).aspectRatio(cover.artAspect).clipToBounds()
+                            .clickable(role = Role.Button, onClickLabel = stringResource(action)) { onSelectBook(book) },
+                    )
+                    if (book.number in undownloaded) {
+                        Box(
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(3.dp).size(22.dp)
+                                .clip(CircleShape).background(Color(0xCC0B1B2E)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Download,
+                                contentDescription = "غير منزّل",
+                                tint = Color(0xFF65D4FA),
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -155,6 +155,14 @@ def download_entry(commit: str, entry: dict[str, object], token: str | None) -> 
 
 def main() -> int:
     commit, entries = load_manifest()
+    # --only <path> [<path> ...] restricts preparation to the named manifest
+    # entries (the light app build only needs the reviewed pupil translation).
+    if "--only" in sys.argv:
+        index = sys.argv.index("--only")
+        wanted = [arg for arg in sys.argv[index + 1:] if not arg.startswith("--")]
+        entries = [entry for entry in entries if str(entry["path"]) in wanted]
+        if len(entries) != len(wanted):
+            raise SystemExit(f"--only paths not present in the manifest: {wanted}")
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     total_bytes = sum(int(entry["size"]) for entry in entries)
     print(

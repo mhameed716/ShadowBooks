@@ -1,0 +1,56 @@
+name: Publish Store Content
+
+# One-command publishing for the in-app store. Collects every textbook, summary
+# and exam PDF from its existing source, generates the store catalog (each
+# file's destination, size, SHA-256, revision), uploads only new or changed
+# files to the fixed "store" release, and publishes the catalog last.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'store/**'
+      - 'scripts/build_store_catalog.py'
+      - 'scripts/publish_store.sh'
+      - 'scripts/download_books.sh'
+      - 'scripts/download_study_assets.py'
+      - 'scripts/study-assets-manifest.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-store
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Collect textbooks, study PDFs, and Quran audio from their sources
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/download_books.sh
+
+      - name: Stage store content (textbooks and study PDFs only)
+        run: |
+          set -euo pipefail
+          staging=app/build/store-content
+          mkdir -p "$staging/books/study"
+          cp app/src/main/assets/books/*.pdf "$staging/books/"
+          cp -r app/src/main/assets/books/study/. "$staging/books/study/"
+          if [ -d app/build/generated/study-assets/books/study ]; then
+            cp -r app/build/generated/study-assets/books/study/. "$staging/books/study/"
+          fi
+          find "$staging" -type f | sort
+
+      - name: Build the store catalog
+        run: python3 scripts/build_store_catalog.py
+
+      - name: Publish to the store release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_store.sh

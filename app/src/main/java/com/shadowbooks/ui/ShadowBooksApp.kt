@@ -9,14 +9,16 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.StudyMaterialKind
+import com.shadowbooks.store.StoreContent
 
-private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader }
+private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader, Store }
 
 private fun Book.availableVolumes() = volumes.ifEmpty { listOf(BookVolume(title, fileName)) }
 
@@ -37,6 +39,9 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     var studyChooserCategory by rememberSaveable { mutableStateOf<Int?>(null) }
     var studyChoosingGoldenUnits by rememberSaveable { mutableStateOf(false) }
     var readerFromDevicePdfs by rememberSaveable { mutableStateOf(false) }
+    var readerFromStore by rememberSaveable { mutableStateOf(false) }
+    var storeSection by rememberSaveable { mutableIntStateOf(STORE_SECTION_LIBRARY) }
+    val context = LocalContext.current
     val libraryScroll = rememberLazyListState()
     val book = BookCatalog.books.firstOrNull { it.number == bookNumber }
     val bookVolume = book?.availableVolumes()?.find { it.fileName == volumeFile }
@@ -48,6 +53,7 @@ fun ShadowBooksApp(onExit: () -> Unit) {
             description = readerDescription,
             contentUri = readerContentUri,
         )
+        readerFromStore && volumeFile.isNotBlank() -> BookVolume(readerTitle, volumeFile, readerDescription)
         readerFromResources && volumeFile.isNotBlank() -> BookVolume(readerTitle, volumeFile, readerDescription)
         else -> bookVolume
     }
@@ -59,6 +65,7 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     val back: () -> Unit = {
         when (screen) {
             AppDestination.Reader -> destination = when {
+                readerFromStore -> AppDestination.Store
                 readerFromDevicePdfs -> AppDestination.DevicePdfs
                 readerFromResources -> AppDestination.StudyResources
                 book != null && book.volumes.size > 1 -> AppDestination.VolumeChooser
@@ -68,6 +75,7 @@ fun ShadowBooksApp(onExit: () -> Unit) {
             AppDestination.DevicePdfs -> destination = AppDestination.Library
             AppDestination.VolumeChooser -> destination = AppDestination.Library
             AppDestination.Timetable -> destination = AppDestination.Library
+            AppDestination.Store -> destination = AppDestination.Library
             AppDestination.Library -> destination = AppDestination.Welcome
             AppDestination.Welcome -> onExit()
         }
@@ -82,19 +90,32 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                     bookNumber = selected.number
                     readerFromResources = false
                     readerFromDevicePdfs = false
+                    readerFromStore = false
                     readerContentUri = ""
                     val volumes = selected.availableVolumes()
                     volumeFile = volumes.first().fileName
-                    destination = if (volumes.size > 1) AppDestination.VolumeChooser else AppDestination.Reader
+                    destination = when {
+                        volumes.size > 1 -> AppDestination.VolumeChooser
+                        StoreContent.isBookDownloaded(context, selected) -> AppDestination.Reader
+                        else -> {
+                            storeSection = STORE_SECTION_LIBRARY
+                            AppDestination.Store
+                        }
+                    }
                 },
                 onOpenStudyResources = { destination = AppDestination.StudyResources },
                 onOpenTimetable = { destination = AppDestination.Timetable },
                 onOpenDevicePdfs = { destination = AppDestination.DevicePdfs },
+                onOpenStore = {
+                    storeSection = STORE_SECTION_LIBRARY
+                    destination = AppDestination.Store
+                },
             )
             AppDestination.Timetable -> TimetableScreen(
                 onLibrary = { destination = AppDestination.Library },
                 onStudyResources = { destination = AppDestination.StudyResources },
                 onDevicePdfs = { destination = AppDestination.DevicePdfs },
+                onStore = { destination = AppDestination.Store },
             )
             AppDestination.StudyResources -> StudyResourcesScreen(
                 kind = studyKind,
@@ -106,9 +127,18 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                 onLibrary = { destination = AppDestination.Library },
                 onTimetable = { destination = AppDestination.Timetable },
                 onDevicePdfs = { destination = AppDestination.DevicePdfs },
+                onOpenStore = {
+                    storeSection = if (studyKind == StudyMaterialKind.Summary) {
+                        STORE_SECTION_SUMMARY
+                    } else {
+                        STORE_SECTION_EXAM
+                    }
+                    destination = AppDestination.Store
+                },
                 onOpen = { selected ->
                     readerFromResources = true
                     readerFromDevicePdfs = false
+                    readerFromStore = false
                     readerContentUri = ""
                     volumeFile = selected.fileName
                     readerTitle = selected.title
@@ -120,9 +150,11 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                 onLibrary = { destination = AppDestination.Library },
                 onStudyResources = { destination = AppDestination.StudyResources },
                 onTimetable = { destination = AppDestination.Timetable },
+                onStore = { destination = AppDestination.Store },
                 onOpen = { selected ->
                     readerFromResources = false
                     readerFromDevicePdfs = true
+                    readerFromStore = false
                     volumeFile = selected.fileName
                     readerTitle = selected.title
                     readerDescription = selected.description
@@ -135,8 +167,41 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                 onSelectVolume = { selected ->
                     readerFromResources = false
                     readerFromDevicePdfs = false
+                    readerFromStore = false
                     readerContentUri = ""
                     volumeFile = selected.fileName
+                    destination = AppDestination.Reader
+                },
+                onOpenStore = {
+                    storeSection = STORE_SECTION_LIBRARY
+                    destination = AppDestination.Store
+                },
+            )
+            AppDestination.Store -> StoreScreen(
+                section = storeSection,
+                onSectionChange = { storeSection = it },
+                onLibrary = { destination = AppDestination.Library },
+                onStudyResources = { destination = AppDestination.StudyResources },
+                onTimetable = { destination = AppDestination.Timetable },
+                onDevicePdfs = { destination = AppDestination.DevicePdfs },
+                onOpenBook = { selected ->
+                    readerFromResources = false
+                    readerFromDevicePdfs = false
+                    readerFromStore = true
+                    readerContentUri = ""
+                    volumeFile = selected.fileName
+                    readerTitle = selected.title
+                    readerDescription = selected.description
+                    destination = AppDestination.Reader
+                },
+                onOpenStudy = { selected ->
+                    readerFromResources = true
+                    readerFromDevicePdfs = false
+                    readerFromStore = true
+                    readerContentUri = ""
+                    volumeFile = selected.fileName
+                    readerTitle = selected.title
+                    readerDescription = selected.description
                     destination = AppDestination.Reader
                 },
             )

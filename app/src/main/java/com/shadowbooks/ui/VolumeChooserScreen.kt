@@ -18,13 +18,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -34,13 +37,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookVolume
+import com.shadowbooks.store.StoreContent
+import com.shadowbooks.store.StoreDownloadState
+import com.shadowbooks.store.StoreDownloader
+import com.shadowbooks.store.StoreEntry
 
 @Composable
 fun VolumeChooserScreen(
     book: Book,
     onBack: () -> Unit,
     onSelectVolume: (BookVolume) -> Unit,
+    onOpenStore: () -> Unit,
 ) {
+    val context = LocalContext.current
+    // Store catalog snapshot for per-volume sizes; refreshes as downloads land.
+    val installedVersion = StoreContent.installedVersion
+    val catalog = remember(context, installedVersion) { StoreContent.cachedCatalog(context) }
+    val downloadStates = StoreDownloader.states
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -76,9 +89,23 @@ fun VolumeChooserScreen(
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             book.volumes.forEach { volume ->
-                VolumeOption(volume = volume) {
-                    onSelectVolume(volume)
-                }
+                val entry = catalog.firstOrNull { it.dest == "books/${volume.fileName}" }
+                val downloaded = StoreContent.isVolumeDownloaded(context, volume.fileName)
+                val state = downloadStates[entry?.dest]
+                VolumeOption(
+                    volume = volume,
+                    downloaded = downloaded,
+                    entry = entry,
+                    state = state,
+                    onClick = {
+                        when {
+                            downloaded -> onSelectVolume(volume)
+                            entry != null -> StoreDownloader.enqueue(context, entry)
+                            else -> onOpenStore()
+                        }
+                    },
+                    onPause = { entry?.let { StoreDownloader.pause(it.dest) } },
+                )
             }
         }
 
@@ -96,7 +123,14 @@ fun VolumeChooserScreen(
 }
 
 @Composable
-private fun VolumeOption(volume: BookVolume, onClick: () -> Unit) {
+private fun VolumeOption(
+    volume: BookVolume,
+    downloaded: Boolean,
+    entry: StoreEntry?,
+    state: StoreDownloadState?,
+    onClick: () -> Unit,
+    onPause: () -> Unit,
+) {
     val shape = RoundedCornerShape(18.dp)
     Row(
         modifier = Modifier
@@ -135,9 +169,28 @@ private fun VolumeOption(volume: BookVolume, onClick: () -> Unit) {
                 color = Color(0xFF9BAEC4),
                 fontSize = 11.sp,
             )
+            if (!downloaded) {
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    text = when {
+                        state is StoreDownloadState.Running && state.total > 0 ->
+                            "جارٍ التنزيل ${state.done * 100 / state.total}٪"
+                        state is StoreDownloadState.Failed -> state.message
+                        entry != null -> "غير منزّل · اضغط للتنزيل"
+                        else -> "من المتجر"
+                    },
+                    color = Color(0xFF65D4FA),
+                    fontSize = 11.sp,
+                )
+            }
+        }
+        if (!downloaded && state is StoreDownloadState.Running) {
+            TextButton(onClick = onPause) {
+                Text("إيقاف", color = Color(0xFF65D4FA), fontSize = 12.sp)
+            }
         }
         Icon(
-            imageVector = Icons.Filled.ChevronLeft,
+            imageVector = if (downloaded) Icons.Filled.ChevronLeft else Icons.Filled.Download,
             contentDescription = "فتح ${volume.title}",
             tint = Color(0xFF83DFFF),
             modifier = Modifier.size(23.dp),

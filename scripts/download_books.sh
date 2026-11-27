@@ -5,6 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BOOKS_DIR="$ROOT_DIR/app/src/main/assets/books"
 mkdir -p "$BOOKS_DIR"
 
+# ASSET_MODE=full (default) collects every textbook and study PDF (used by the
+# store publisher). ASSET_MODE=light prepares only what stays bundled in the
+# store-based app: the pupil translation pair and both Quran recitations,
+# assembled into app/build/generated/bundled-assets for the Gradle source sets.
+ASSET_MODE="${ASSET_MODE:-full}"
+
 # All fifteen textbook PDFs: filename|public Google Drive file id.
 # Existing valid PDFs are reused; the English pupil edition is checked against its prepared Arabic pages below.
 BOOKS=(
@@ -28,6 +34,11 @@ BOOKS=(
 for entry in "${BOOKS[@]}"; do
   filename="${entry%%|*}"
   file_id="${entry#*|}"
+  # The light build downloads only the pupil edition, which the prepared
+  # Arabic translation is verified against; the book itself ships via the store.
+  if [[ "$ASSET_MODE" == "light" && "$filename" != "english-student-book.pdf" ]]; then
+    continue
+  fi
   target="$BOOKS_DIR/$filename"
   temporary="$target.$$.part"
 
@@ -61,7 +72,12 @@ for entry in "${BOOKS[@]}"; do
 done
 
 # Download study PDFs into app/build (ignored by Git/snapshots), where full variants package them as assets.
-python3 "$ROOT_DIR/scripts/download_study_assets.py"
+# The light build needs only the reviewed pupil translation from the manifest.
+if [[ "$ASSET_MODE" == "light" ]]; then
+  python3 "$ROOT_DIR/scripts/download_study_assets.py" --only reviewed/pupil6-ar.pdf
+else
+  python3 "$ROOT_DIR/scripts/download_study_assets.py"
+fi
 
 # Refuse to package a different English pupil edition than the one paired with the Arabic pages.
 python3 "$ROOT_DIR/scripts/verify_prepared_book.py"
@@ -138,6 +154,20 @@ else
     exit 1
   fi
   mv -n -- "$SOBHI_TEMP" "$SOBHI_TARGET"
+fi
+
+# The light app bundles nothing else: textbooks and study PDFs ship via the store.
+# Assemble exactly the assets that stay in the APK and stop here.
+if [[ "$ASSET_MODE" == "light" ]]; then
+  BUNDLED="$ROOT_DIR/app/build/generated/bundled-assets"
+  rm -rf "$BUNDLED"
+  mkdir -p "$BUNDLED/reviewed" "$BUNDLED/books/quran-audio" "$BUNDLED/licenses"
+  cp "$ROOT_DIR/app/src/main/assets/reviewed/pupil6-ar.json" "$BUNDLED/reviewed/"
+  cp "$ROOT_DIR/app/build/generated/study-assets/reviewed/pupil6-ar.pdf" "$BUNDLED/reviewed/"
+  cp "$BOOKS_DIR/quran-audio/"*.mp3 "$BUNDLED/books/quran-audio/"
+  cp "$ROOT_DIR/app/src/main/assets/licenses/Noto-Naskh-OFL.txt" "$BUNDLED/licenses/"
+  echo "Light bundled assets ready: pupil translation pair + both Quran recitations."
+  exit 0
 fi
 
 # Arabic-language exam PDFs (internal 06- prefix, hidden in the UI) for the merged Arabic exams card.
