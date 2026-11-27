@@ -60,8 +60,11 @@ def verify(apk=None):
             reviewed = sorted(n for n in names if n.startswith('assets/reviewed/') and not n.endswith('/'))
             if reviewed != sorted(['assets/'+PDF, 'assets/'+INDEX]):
                 raise ValueError('Unexpected prepared assets in full APK')
-            for name, expected in files.items():
-                if archive.read('assets/'+name) != expected:
+            # Only the prepared pair (and its font license) is bundled now; the
+            # English source book itself is delivered by the in-app store, so it
+            # must NOT be required inside the APK (verify_light_apk forbids it).
+            for name in (PDF, INDEX, LICENSE):
+                if archive.read('assets/'+name) != files[name]:
                     raise ValueError(f'{name}: packaged bytes differ from the reviewed file')
             stored = sum(archive.getinfo('assets/'+f).compress_size for f in (PDF, INDEX))
         print(f'Full APK: {apk.stat().st_size:,} bytes. Its two prepared entries occupy {stored:,} bytes before ZIP overhead.')
