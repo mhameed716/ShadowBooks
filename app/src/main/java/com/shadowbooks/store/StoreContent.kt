@@ -28,6 +28,10 @@ data class StoreEntry(
     val size: Long,
     val sha256: String,
     val rev: Int,
+    /** Release asset name (pure ASCII, decided by the catalog). GitHub
+     * rewrites uploaded names with Arabic/spaces into dotted ones, so the app
+     * must ask for exactly this name and never derive one from [dest]. */
+    val asset: String = "",
 ) {
     val fileName: String get() = dest.substringAfterLast('/')
     val isBook: Boolean get() = dest.startsWith("books/") && !dest.startsWith("books/study/")
@@ -112,6 +116,7 @@ object StoreContent {
     fun deleteLocal(context: Context, entry: StoreEntry) {
         localFile(context, entry.dest).delete()
         File(localFile(context, entry.dest).path + ".part").delete()
+        File(localFile(context, entry.dest).path + ".parts").delete()
         val registry = registry(context)
         if (registry.remove(entry.dest) != null) saveRegistry(context, registry)
         StoreDownloader.forget(entry.dest)
@@ -159,8 +164,9 @@ object StoreContent {
                 val size = item.optLong("size", -1L)
                 val sha = item.optString("sha256")
                 val rev = item.optInt("rev", 1)
+                val asset = item.optString("asset")
                 if (dest.startsWith("books/") && size > 0 && sha.length == 64) {
-                    add(StoreEntry(dest, size, sha, rev))
+                    add(StoreEntry(dest, size, sha, rev, asset))
                 }
             }
         }

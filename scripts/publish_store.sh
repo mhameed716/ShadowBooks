@@ -2,11 +2,14 @@
 # Publish staged store content to the fixed GitHub Release tagged "store".
 #
 # Reads app/build/store-content/catalog.json (from build_store_catalog.py) and
-# the staged PDFs beside it. Every catalog entry maps to one release asset whose
-# name is the destination path with '/' replaced by '__'. Assets whose published
-# SHA-256 already matches are skipped; new or changed files are uploaded with
-# --clobber. catalog.json is uploaded LAST, so a phone can never read a catalog
-# that points at a file which is not there yet.
+# the staged PDFs beside it. Every catalog entry carries its own release asset
+# name ("asset": pure-ASCII, derived from the destination — GitHub rewrites
+# uploaded names containing Arabic/Spaces into dotted ones, which broke every
+# Arabic-named download with HTTP 404). Assets whose published SHA-256 already
+# matches are skipped; new or changed files are uploaded with --clobber under
+# exactly that name. catalog.json is uploaded LAST, so a phone can never read
+# a catalog that points at a file which is not there yet, and only then are
+# orphaned assets (e.g. the old dotted names) deleted.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -48,7 +51,8 @@ while IFS= read -r entry; do
   dest="$(printf '%s' "$entry" | python3 -c 'import json,sys; print(json.load(sys.stdin)["dest"])')"
   size="$(printf '%s' "$entry" | python3 -c 'import json,sys; print(json.load(sys.stdin)["size"])')"
   sha="$(printf '%s' "$entry" | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha256"])')"
-  name="$(asset_name "$dest")"
+  name="$(printf '%s' "$entry" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("asset") or "")')"
+  if [[ -z "$name" ]]; then name="$(asset_name "$dest")"; fi
   remote_size="$(remote_field "$name" 2 || true)"
   remote_digest="$(remote_field "$name" 3 || true)"
   remote_sha="${remote_digest#sha256:}"
@@ -98,7 +102,34 @@ echo "Uploading catalog.json (always last) ..."
 cp "$CATALOG" "$UPLOAD_DIR/catalog.json"
 gh release upload "$TAG" "$UPLOAD_DIR/catalog.json" --clobber --repo "$REPO"
 
-echo "Store publish complete: $added added, $updated updated, $skipped unchanged."
+# Retire assets the current catalog no longer references (the pre-fix release
+# holds dotted-name duplicates of every Arabic file). Only after the new
+# catalog is live, so no phone can be left pointing at a deleted name.
+echo "Removing orphaned assets ..."
+EXPECTED_FILE="$(mktemp)"; REMOTE_NAMES="$(mktemp)"
+trap 'rm -rf "$UPLOAD_DIR" "$REMOTE_FILE" "$EXPECTED_FILE" "$REMOTE_NAMES"' EXIT
+{
+  python3 -c '
+import json, sys
+catalog = json.load(open(sys.argv[1], encoding="utf-8"))
+for entry in catalog["entries"]:
+    print(entry.get("asset") or "")
+' "$CATALOG"
+  echo "catalog.json"
+} | grep -v '^$' | LC_ALL=C sort -u > "$EXPECTED_FILE"
+gh api "repos/$REPO/releases/tags/$TAG" --jq '.assets[].name' | LC_ALL=C sort -u > "$REMOTE_NAMES" || true
+removed=0
+while IFS= read -r orphan; do
+  [[ -z "$orphan" ]] && continue
+  echo "Deleting orphaned asset: $orphan"
+  if gh release delete-asset "$TAG" "$orphan" --repo "$REPO" --yes; then
+    removed=$((removed + 1))
+  else
+    echo "WARNING: could not delete orphaned asset: $orphan" >&2
+  fi
+done < <(LC_ALL=C comm -13 "$EXPECTED_FILE" "$REMOTE_NAMES")
+
+echo "Store publish complete: $added added, $updated updated, $skipped unchanged, $removed orphans removed."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "## ShadowBooks store publish"
