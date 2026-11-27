@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.shadowbooks.BuildConfig
 import com.shadowbooks.R
 import java.security.MessageDigest
 
@@ -120,12 +121,10 @@ fun WelcomeScreen(onEnter: () -> Unit) {
     val phase = rememberWelcomePhase()
     val context = LocalContext.current
     var showGate by rememberSaveable { mutableStateOf(false) }
-    fun gateUnlocked() = context.getSharedPreferences(GatePreferences, Context.MODE_PRIVATE)
-        .getBoolean(GateUnlockedKey, false)
     // The welcome "دخول" button never enters directly on a locked device: it raises the
-    // channel gate first. After one correct code the device stays unlocked.
+    // channel gate first. One correct code unlocks this app version only.
     val enter: () -> Unit = {
-        if (gateUnlocked()) onEnter() else showGate = true
+        if (isChannelUnlocked(context)) onEnter() else showGate = true
     }
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(Navy).safeDrawingPadding(),
@@ -154,8 +153,7 @@ fun WelcomeScreen(onEnter: () -> Unit) {
         ChannelGateDialog(
             onDismiss = { showGate = false },
             onUnlocked = {
-                context.getSharedPreferences(GatePreferences, Context.MODE_PRIVATE)
-                    .edit().putBoolean(GateUnlockedKey, true).apply()
+                markChannelUnlocked(context)
                 showGate = false
                 onEnter()
             },

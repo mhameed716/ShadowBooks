@@ -10,6 +10,8 @@
     <!-- Lets the student exempt store downloads from battery optimization so
          long downloads on weak networks are not killed in the background. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Re-arms the daily study reminder after a reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -60,5 +62,17 @@
             android:name=".store.StoreDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Daily «حان وقت المذاكرة» reminder, re-armed after every reboot. -->
+        <receiver
+            android:name=".reminder.StudyReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".reminder.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

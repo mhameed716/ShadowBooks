@@ -72,10 +72,15 @@ import com.shadowbooks.R
 import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
+import com.shadowbooks.data.Favorites
 import com.shadowbooks.data.StudyMaterialCatalog
 import com.shadowbooks.data.StudyMaterialFile
 import com.shadowbooks.data.StudyMaterialKind
 import com.shadowbooks.store.LibraryPack
+import com.shadowbooks.store.TrashBin
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import com.shadowbooks.store.PackImportRequest
 import com.shadowbooks.store.StoreContent
 import com.shadowbooks.store.StoreCovers
@@ -126,6 +131,9 @@ fun StoreScreen(
     var refreshFailed by remember { mutableStateOf(false) }
     var downloadedMode by remember { mutableStateOf(false) }
     var refreshTick by remember { mutableIntStateOf(0) }
+    var showSettings by remember { mutableStateOf(false) }
+    var trashTarget by remember { mutableStateOf<StoreEntry?>(null) }
+    LaunchedEffect(Unit) { Favorites.load(context) }
 
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -347,6 +355,7 @@ fun StoreScreen(
                     fontSize = 25.sp,
                     modifier = Modifier.weight(1f),
                 )
+                SpinningGearButton(onClick = { showSettings = true })
                 if (refreshing) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = StoreCyan)
                 } else {
@@ -556,22 +565,35 @@ fun StoreScreen(
                             val rows = volumes.mapNotNull { volume ->
                                 entriesByDest["books/${volume.fileName}"]?.let { volume to it }
                             }
-                            val visible = if (downloadedMode) {
+                            val visible = (if (downloadedMode) {
                                 rows.filter { StoreContent.isInstalled(context, it.second) }
                             } else {
                                 rows
+                            }).sortedByDescending {
+                                Favorites.isFavorite(it.second.dest)
                             }
                             if (visible.isNotEmpty()) {
                                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     StoreHeader(book.title)
-                                    visible.forEach { (volume, entry) ->
-                                        StoreEntryRow(
-                                            entry = entry,
-                                            title = volume.title,
-                                            downloadedMode = downloadedMode,
-                                            onOpen = { onOpenBook(volume) },
-                                            onDownload = { enqueue(entry) },
-                                        )
+                                    visible.chunked(2).forEach { pair ->
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(9.dp),
+                                        ) {
+                                            pair.forEach { (volume, entry) ->
+                                                Box(Modifier.weight(1f)) {
+                                                    StoreEntryRow(
+                                                        entry = entry,
+                                                        title = volume.title,
+                                                        downloadedMode = downloadedMode,
+                                                        onOpen = { onOpenBook(volume) },
+                                                        onDownload = { enqueue(entry) },
+                                                        onDelete = { trashTarget = entry },
+                                                    )
+                                                }
+                                            }
+                                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                        }
                                     }
                                 }
                             }
@@ -615,32 +637,45 @@ fun StoreScreen(
                             }
                         }
                         items(sections, key = { it.key }) { studySection ->
-                            val visible = if (downloadedMode) {
+                            val visible = (if (downloadedMode) {
                                 studySection.rows.filter {
                                     StoreContent.isInstalled(context, it.second)
                                 }
                             } else {
                                 studySection.rows
+                            }).sortedByDescending {
+                                Favorites.isFavorite(it.second.dest)
                             }
                             if (visible.isNotEmpty()) {
                                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     StoreHeader(studySection.title)
-                                    visible.forEach { (material, entry) ->
-                                        StoreEntryRow(
-                                            entry = entry,
-                                            title = material.title,
-                                            downloadedMode = downloadedMode,
-                                            onOpen = {
-                                                onOpenStudy(
-                                                    BookVolume(
-                                                        material.title,
-                                                        material.assetPath,
-                                                        kind.label,
-                                                    ),
-                                                )
-                                            },
-                                            onDownload = { enqueue(entry) },
-                                        )
+                                    visible.chunked(2).forEach { pair ->
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(9.dp),
+                                        ) {
+                                            pair.forEach { (material, entry) ->
+                                                Box(Modifier.weight(1f)) {
+                                                    StoreEntryRow(
+                                                        entry = entry,
+                                                        title = material.title,
+                                                        downloadedMode = downloadedMode,
+                                                        onOpen = {
+                                                            onOpenStudy(
+                                                                BookVolume(
+                                                                    material.title,
+                                                                    material.assetPath,
+                                                                    kind.label,
+                                                                ),
+                                                            )
+                                                        },
+                                                        onDownload = { enqueue(entry) },
+                                                        onDelete = { trashTarget = entry },
+                                                    )
+                                                }
+                                            }
+                                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                        }
                                     }
                                 }
                             }
@@ -657,6 +692,23 @@ fun StoreScreen(
             onDevicePdfs = onDevicePdfs,
             onStore = {},
         )
+    }
+
+    trashTarget?.let { entry ->
+        ConfirmTwiceDialog(
+            what = entry.fileName.removeSuffix(".pdf").replace('_', ' '),
+            note = "سينتقل إلى سلة المحذوفات في الإعدادات، ويمكنك استرجاعه منها خلال شهر.",
+            onDismiss = { trashTarget = null },
+            onConfirmed = {
+                trashTarget = null
+                StoreDownloader.cancel(entry.dest)
+                TrashBin.moveToTrash(context, entry)
+            },
+        )
+    }
+
+    if (showSettings) {
+        SettingsSheet(onDismiss = { showSettings = false })
     }
 }
 
@@ -703,9 +755,9 @@ private fun StoreEntryRow(
     downloadedMode: Boolean,
     onOpen: () -> Unit,
     onDownload: () -> Unit,
+    onDelete: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val installedVersion = StoreContent.installedVersion
     val state = StoreDownloader.states[entry.dest]
     val installed = StoreContent.isInstalled(context, entry)
     val update = StoreContent.hasUpdate(context, entry)
@@ -714,40 +766,87 @@ private fun StoreEntryRow(
     } else {
         0L
     }
+    val favorite = Favorites.isFavorite(entry.dest)
+    val running = state as? StoreDownloadState.Running
     Card(
         modifier = Modifier.fillMaxWidth()
             .clickable(enabled = installed, role = Role.Button, onClick = onOpen),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = StoreCard),
     ) {
-      Box(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            StoreCover(entry)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
+        Column(Modifier.fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth()) {
+                StoreCover(entry, Modifier.fillMaxWidth().aspectRatio(0.78f))
+                if (entry.isNew()) {
+                    Text(
+                        "New",
+                        color = Color.White,
+                        fontFamily = StoreFont,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 10.sp,
+                        modifier = Modifier.align(Alignment.TopStart)
+                            .padding(start = 8.dp, top = 8.dp)
+                            .background(Color(0xFFE53935), RoundedCornerShape(50))
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
+                IconButton(
+                    onClick = { Favorites.toggle(context, entry.dest) },
+                    modifier = Modifier.align(Alignment.TopEnd).size(36.dp),
+                ) {
+                    Icon(
+                        if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                        contentDescription = if (favorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
+                        tint = if (favorite) Color(0xFFFFC86B) else Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                if (running != null) {
+                    Column(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                            .background(Color(0xB3071326))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                    ) {
+                        LinearProgressIndicator(
+                            progress = {
+                                if (running.total > 0) {
+                                    (running.done.toFloat() / running.total).coerceIn(0f, 1f)
+                                } else {
+                                    0f
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = StoreCyan,
+                        )
+                        val speed = StoreDownloader.speedBps(entry.dest)
+                        Text(
+                            if (speed > 0L && running.total > running.done) {
+                                "المتبقي ${formatEta((running.total - running.done) / speed)}"
+                            } else {
+                                "جارٍ التنزيل..."
+                            },
+                            color = StoreCyan,
+                            fontFamily = StoreFont,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(top = 3.dp),
+                        )
+                    }
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp)) {
                 Text(
                     title,
                     color = Color.White,
                     fontFamily = StoreFont,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(3.dp))
                 val detail = when {
-                    state is StoreDownloadState.Running -> {
-                        val base = "${formatStoreSize(state.done)} من ${formatStoreSize(state.total)}"
-                        val speed = StoreDownloader.speedBps(entry.dest)
-                        if (speed > 0L && state.total > state.done) {
-                            base + " · المتبقي ${formatEta((state.total - state.done) / speed)} بهذه السرعة"
-                        } else {
-                            base
-                        }
-                    }
+                    running != null ->
+                        "${formatStoreSize(running.done)} من ${formatStoreSize(running.total)}"
                     state is StoreDownloadState.Failed -> state.message
                     installed && update -> "يتوفر تحديث · ${formatStoreSize(entry.size)}"
                     installed -> formatStoreSize(entry.size)
@@ -762,79 +861,63 @@ private fun StoreEntryRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (state is StoreDownloadState.Running) {
-                    Spacer(Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress = {
-                            if (state.total > 0) {
-                                (state.done.toFloat() / state.total).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = StoreCyan,
-                    )
-                }
-            }
-            Spacer(Modifier.width(10.dp))
-            when {
-                state is StoreDownloadState.Running -> IconButton(
-                    onClick = { StoreDownloader.pause(entry.dest) },
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Filled.Pause, contentDescription = "إيقاف مؤقت", tint = StoreCyan)
-                }
-                installed && !update -> TextButton(onClick = onOpen) {
-                    Text("فتح", color = StoreCyan, fontFamily = StoreFont)
-                }
-                else -> TextButton(onClick = onDownload) {
-                    Icon(
-                        Icons.Filled.Download,
-                        contentDescription = null,
-                        tint = StoreCyan,
-                        modifier = Modifier.size(17.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
+                    Box(Modifier.weight(1f)) {
                         when {
-                            update -> "تحديث"
-                            partial > 0L || state is StoreDownloadState.Paused -> "استئناف"
-                            state is StoreDownloadState.Failed -> "إعادة المحاولة"
-                            else -> "تنزيل"
-                        },
-                        color = StoreCyan,
-                        fontFamily = StoreFont,
-                        fontSize = 13.sp,
-                    )
-                }
-            }
-            if (downloadedMode && installed) {
-                IconButton(onClick = {
-                    StoreDownloader.cancel(entry.dest)
-                    StoreContent.deleteLocal(context, entry)
-                }) {
-                    Icon(
-                        Icons.Filled.DeleteOutline,
-                        contentDescription = "حذف",
-                        tint = Color(0xFFFF9D9D),
-                    )
+                            running != null -> TextButton(
+                                onClick = { StoreDownloader.pause(entry.dest) },
+                            ) {
+                                Icon(
+                                    Icons.Filled.Pause,
+                                    contentDescription = null,
+                                    tint = StoreCyan,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("إيقاف", color = StoreCyan, fontFamily = StoreFont, fontSize = 12.sp)
+                            }
+                            installed && !update -> TextButton(onClick = onOpen) {
+                                Text("فتح", color = StoreCyan, fontFamily = StoreFont, fontSize = 13.sp)
+                            }
+                            else -> TextButton(onClick = onDownload) {
+                                Icon(
+                                    Icons.Filled.Download,
+                                    contentDescription = null,
+                                    tint = StoreCyan,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    when {
+                                        update -> "تحديث"
+                                        partial > 0L || state is StoreDownloadState.Paused -> "استئناف"
+                                        state is StoreDownloadState.Failed -> "إعادة المحاولة"
+                                        else -> "تنزيل"
+                                    },
+                                    color = StoreCyan,
+                                    fontFamily = StoreFont,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                    if (downloadedMode && installed) {
+                        IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                            Icon(
+                                Icons.Filled.DeleteOutline,
+                                contentDescription = "حذف",
+                                tint = Color(0xFFFF9D9D),
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
-        if (entry.isNew()) {
-            Text(
-                "New",
-                color = Color.White,
-                fontFamily = StoreFont,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.TopStart)
-                    .padding(start = 8.dp, top = 6.dp)
-                    .background(Color(0xFFE53935), RoundedCornerShape(50))
-                    .padding(horizontal = 7.dp, vertical = 2.dp),
-            )
-        }
-      }
     }
 }
 
@@ -856,18 +939,16 @@ private fun formatEta(seconds: Long): String = when {
     else -> "حوالي ${seconds / 3600} ساعة و${(seconds % 3600 + 59) / 60} دقيقة"
 }
 
-/** The PDF's own first page as the card cover; placeholder until it lands. */
+/** The PDF's own first page, large on top of each card; placeholder until it lands. */
 @Composable
-private fun StoreCover(entry: StoreEntry) {
+private fun StoreCover(entry: StoreEntry, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var bitmap by remember(entry.dest) { mutableStateOf(StoreCovers.peek(entry.dest)) }
     LaunchedEffect(entry.dest) {
         if (bitmap == null) bitmap = StoreCovers.load(context, entry)
     }
     Box(
-        Modifier.size(width = 46.dp, height = 64.dp)
-            .clip(RoundedCornerShape(7.dp))
-            .background(Color(0xFF1B2C47)),
+        modifier.background(Color(0xFF1B2C47)),
         contentAlignment = Alignment.Center,
     ) {
         val cover = bitmap
@@ -883,7 +964,7 @@ private fun StoreCover(entry: StoreEntry) {
                 Icons.Filled.MenuBook,
                 contentDescription = null,
                 tint = StoreMuted,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(34.dp),
             )
         }
     }

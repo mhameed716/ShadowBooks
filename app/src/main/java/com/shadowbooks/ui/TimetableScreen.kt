@@ -217,6 +217,7 @@ fun TimetableScreen(
     val dateKey = remember(clockMillis / 60_000L) { SimpleDateFormat("yyyyMMdd", Locale.US).format(now) }
 
     var detailsOpen by remember { mutableStateOf(false) }
+    var showAppSettings by remember { mutableStateOf(false) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var editCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var editSubject by remember { mutableStateOf("") }
@@ -234,6 +235,7 @@ fun TimetableScreen(
             clockText = clockText,
             dateText = dateText,
             onDetails = { detailsOpen = !detailsOpen },
+            onSettingsGear = { showAppSettings = true },
             detailsOpen = detailsOpen,
             schedule = schedule,
             detailsPeriod = detailsPeriod,
@@ -264,6 +266,7 @@ fun TimetableScreen(
             contentPadding = PaddingValues(top = 5.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
+            item(key = "focus-timer") { FocusTimerCard() }
             item(key = "period-heading") { PeriodHeading() }
             // Thursday is optional: when off, Wednesday stays the last school day.
             val visibleDays = Weekdays.indices.filter { day -> thursdayEnabled || day != Weekdays.lastIndex }
@@ -432,6 +435,10 @@ fun TimetableScreen(
             onDismiss = { recordsOpen = false },
         )
     }
+
+    if (showAppSettings) {
+        SettingsSheet(onDismiss = { showAppSettings = false })
+    }
 }
 
 @Composable
@@ -439,6 +446,7 @@ private fun ScheduleHeader(
     clockText: String,
     dateText: String,
     onDetails: () -> Unit,
+    onSettingsGear: () -> Unit,
     detailsOpen: Boolean,
     schedule: BellSchedule,
     detailsPeriod: Int,
@@ -450,7 +458,9 @@ private fun ScheduleHeader(
 ) {
     Box(Modifier.fillMaxWidth().height(146.dp)) {
         ImageLogo(Modifier.align(Alignment.TopStart).padding(top = 11.dp, start = 14.dp))
-        Box(Modifier.align(Alignment.TopEnd)) {
+        Row(Modifier.align(Alignment.TopEnd), verticalAlignment = Alignment.CenterVertically) {
+            SpinningGearButton(onClick = onSettingsGear)
+            Box {
             IconButton(onClick = onDetails, modifier = Modifier.padding(start = 3.dp, top = 1.dp)) {
                 Icon(Icons.Filled.AccessTime, contentDescription = "بيانات الحصص", tint = ScheduleCyan, modifier = Modifier.size(24.dp))
             }
@@ -494,6 +504,7 @@ private fun ScheduleHeader(
                         Switch(checked = thursdayEnabled, onCheckedChange = onThursdayChange)
                     }
                 }
+            }
             }
         }
         Column(
@@ -732,6 +743,109 @@ private fun LessonFileDialog(
 private fun historyDateLabel(dateKey: String): String {
     val parsed = runCatching { SimpleDateFormat("yyyyMMdd", Locale.US).parse(dateKey) }.getOrNull() ?: return dateKey
     return SimpleDateFormat("EEEE، d MMMM yyyy", Locale.forLanguageTag("ar-YE")).format(parsed)
+}
+
+/**
+ * مؤقّت مذاكرة: 25-minute focus sessions with a gentle alarm at the end.
+ * The session end is kept in saveable state so rotation never loses it.
+ */
+@Composable
+private fun FocusTimerCard() {
+    val context = LocalContext.current
+    var endAt by rememberSaveable { mutableLongStateOf(0L) }
+    var remainingSeconds by remember { mutableIntStateOf(25 * 60) }
+    var finished by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(endAt) {
+        if (endAt <= 0L) {
+            remainingSeconds = 25 * 60
+            return@LaunchedEffect
+        }
+        while (true) {
+            val left = ((endAt - System.currentTimeMillis()) / 1000L).toInt()
+            if (left <= 0) break
+            remainingSeconds = left
+            delay(250L)
+        }
+        remainingSeconds = 0
+        endAt = 0L
+        finished = true
+        try {
+            val uri = android.media.RingtoneManager
+                .getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                ?: android.media.RingtoneManager
+                    .getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            android.media.RingtoneManager.getRingtone(context, uri)?.play()
+        } catch (e: Exception) {
+            // Silent alarm is still an alarm on screen.
+        }
+        android.widget.Toast.makeText(
+            context,
+            "انتهت جلسة التركيز! خذ استراحة قصيرة ثم واصل.",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
+    }
+
+    val running = endAt > 0L
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 4.dp).height(58.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (running) Color(0xFF123E59) else ScheduleSurface)
+            .border(1.dp, if (running) ScheduleCyan.copy(alpha = .8f) else ScheduleLine, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Filled.AccessTime,
+            contentDescription = null,
+            tint = if (finished) ScheduleGold else ScheduleCyan,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "مؤقّت التركيز",
+                color = Color.White,
+                fontFamily = ScheduleFont,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+            )
+            Text(
+                when {
+                    running -> "جلسة مذاكرة جارية — ركّز 25 دقيقة"
+                    finished -> "أحسنت! انتهت الجلسة"
+                    else -> "جلسة مذاكرة مركزة لمدة 25 دقيقة"
+                },
+                color = Color(0xFF9DADC0),
+                fontFamily = ScheduleFont,
+                fontSize = 11.sp,
+            )
+        }
+        Text(
+            "%02d:%02d".format(Locale.US, remainingSeconds / 60, remainingSeconds % 60),
+            color = if (running) ScheduleCyan else Color.White,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+        )
+        Spacer(Modifier.width(10.dp))
+        if (running) {
+            TextButton(onClick = { endAt = 0L; finished = false }) {
+                Text("إيقاف", color = ScheduleRose, fontFamily = ScheduleFont)
+            }
+        } else {
+            Button(
+                onClick = {
+                    finished = false
+                    endAt = System.currentTimeMillis() + 25L * 60 * 1000
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF17443E),
+                    contentColor = ScheduleGreen,
+                ),
+            ) { Text("ابدأ", fontFamily = ScheduleFont, fontWeight = FontWeight.Bold) }
+        }
+    }
 }
 
 /** 12-hour clock face (07:05 ص / 01:05 م) for display only; minutes stay 24-hour inside. */
