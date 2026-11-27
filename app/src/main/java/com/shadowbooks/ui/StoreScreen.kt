@@ -1,16 +1,21 @@
 package com.shadowbooks.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -28,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -52,6 +58,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.Font
@@ -70,10 +78,13 @@ import com.shadowbooks.data.StudyMaterialKind
 import com.shadowbooks.store.LibraryPack
 import com.shadowbooks.store.PackImportRequest
 import com.shadowbooks.store.StoreContent
+import com.shadowbooks.store.StoreCovers
 import com.shadowbooks.store.StoreDownloadState
 import com.shadowbooks.store.StoreDownloader
 import com.shadowbooks.store.StoreEntry
 import java.io.File
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlinx.coroutines.launch
 
@@ -124,6 +135,36 @@ fun StoreScreen(
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         StoreDownloader.enqueue(context, entry)
+    }
+
+    var showUnrestrictedDialog by remember { mutableStateOf(false) }
+    fun openBatteryExemption() {
+        try {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + context.packageName),
+                ),
+            )
+        } catch (e: Exception) {
+            try {
+                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (e2: Exception) {
+                // Some OEMs hide both; the app-settings button below still works.
+            }
+        }
+    }
+    fun openAppSettings() {
+        try {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + context.packageName),
+                ),
+            )
+        } catch (e: Exception) {
+            // Nothing sensible to fall back to.
+        }
     }
 
     LaunchedEffect(refreshTick) {
@@ -322,6 +363,73 @@ fun StoreScreen(
             ) {
                 StoreChip("المتوفرة", !downloadedMode, Modifier.weight(1f)) { downloadedMode = false }
                 StoreChip("المحمّلة", downloadedMode, Modifier.weight(1f)) { downloadedMode = true }
+            }
+
+            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                StoreChip(
+                    "تفعيل التنزيل دون قيود (بطارية + بيانات)",
+                    false,
+                    Modifier.weight(1f),
+                ) { showUnrestrictedDialog = true }
+            }
+
+            if (showUnrestrictedDialog) {
+                val powerManager =
+                    context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                val batteryFree = powerManager
+                    ?.isIgnoringBatteryOptimizations(context.packageName) == true
+                AlertDialog(
+                    onDismissRequest = { showUnrestrictedDialog = false },
+                    containerColor = StoreCard,
+                    title = {
+                        Text(
+                            "التنزيل دون قيود",
+                            color = Color.White,
+                            fontFamily = StoreFont,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    },
+                    text = {
+                        Text(
+                            "حتى لا يقتل الهاتف التنزيلات الطويلة على الشبكات الضعيفة: " +
+                                "اسمح للتطبيق بتجاوز تحسين البطارية، ومن إعدادات التطبيق فعّل " +
+                                "«بيانات الخلفية» و«استخدام بيانات غير مقيد». التطبيق عنده إذن " +
+                                "الإنترنت الكامل أصلًا؛ هذه قيود يفرضها نظام الهاتف لا التطبيق.",
+                            color = StoreMuted,
+                            fontFamily = StoreFont,
+                            fontSize = 14.sp,
+                        )
+                    },
+                    confirmButton = {
+                        Column {
+                            if (!batteryFree) {
+                                TextButton(onClick = {
+                                    showUnrestrictedDialog = false
+                                    openBatteryExemption()
+                                }) {
+                                    Text(
+                                        "إعفاء البطارية",
+                                        color = StoreCyan,
+                                        fontFamily = StoreFont,
+                                    )
+                                }
+                            }
+                            TextButton(onClick = {
+                                showUnrestrictedDialog = false
+                                openAppSettings()
+                            }) {
+                                Text(
+                                    "إعدادات التطبيق والبيانات",
+                                    color = StoreCyan,
+                                    fontFamily = StoreFont,
+                                )
+                            }
+                            TextButton(onClick = { showUnrestrictedDialog = false }) {
+                                Text("إغلاق", color = StoreMuted, fontFamily = StoreFont)
+                            }
+                        }
+                    },
+                )
             }
             // Section toggle.
             Row(
@@ -612,10 +720,13 @@ private fun StoreEntryRow(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = StoreCard),
     ) {
+      Box(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            StoreCover(entry)
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     title,
@@ -628,8 +739,15 @@ private fun StoreEntryRow(
                 )
                 Spacer(Modifier.height(3.dp))
                 val detail = when {
-                    state is StoreDownloadState.Running ->
-                        "${formatStoreSize(state.done)} من ${formatStoreSize(state.total)}"
+                    state is StoreDownloadState.Running -> {
+                        val base = "${formatStoreSize(state.done)} من ${formatStoreSize(state.total)}"
+                        val speed = StoreDownloader.speedBps(entry.dest)
+                        if (speed > 0L && state.total > state.done) {
+                            base + " · المتبقي ${formatEta((state.total - state.done) / speed)} بهذه السرعة"
+                        } else {
+                            base
+                        }
+                    }
                     state is StoreDownloadState.Failed -> state.message
                     installed && update -> "يتوفر تحديث · ${formatStoreSize(entry.size)}"
                     installed -> formatStoreSize(entry.size)
@@ -702,6 +820,71 @@ private fun StoreEntryRow(
                     )
                 }
             }
+        }
+        if (entry.isNew()) {
+            Text(
+                "New",
+                color = Color.White,
+                fontFamily = StoreFont,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.TopStart)
+                    .padding(start = 8.dp, top = 6.dp)
+                    .background(Color(0xFFE53935), RoundedCornerShape(50))
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+            )
+        }
+      }
+    }
+}
+
+/** Recently added to the store: red "New" badge for two weeks from [StoreEntry.added]. */
+private fun StoreEntry.isNew(): Boolean {
+    if (added.isBlank()) return false
+    val date = try {
+        LocalDate.parse(added)
+    } catch (e: Exception) {
+        return false
+    }
+    val days = ChronoUnit.DAYS.between(date, LocalDate.now())
+    return days in 0 until 14
+}
+
+private fun formatEta(seconds: Long): String = when {
+    seconds < 60L -> "أقل من دقيقة"
+    seconds < 3600L -> "حوالي ${(seconds + 59) / 60} دقيقة"
+    else -> "حوالي ${seconds / 3600} ساعة و${(seconds % 3600 + 59) / 60} دقيقة"
+}
+
+/** The PDF's own first page as the card cover; placeholder until it lands. */
+@Composable
+private fun StoreCover(entry: StoreEntry) {
+    val context = LocalContext.current
+    var bitmap by remember(entry.dest) { mutableStateOf(StoreCovers.peek(entry.dest)) }
+    LaunchedEffect(entry.dest) {
+        if (bitmap == null) bitmap = StoreCovers.load(context, entry)
+    }
+    Box(
+        Modifier.size(width = 46.dp, height = 64.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(Color(0xFF1B2C47)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val cover = bitmap
+        if (cover != null) {
+            Image(
+                cover.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Icon(
+                Icons.Filled.MenuBook,
+                contentDescription = null,
+                tint = StoreMuted,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }

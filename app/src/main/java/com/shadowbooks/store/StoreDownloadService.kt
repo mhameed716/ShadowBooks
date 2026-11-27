@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -14,6 +16,15 @@ import com.shadowbooks.MainActivity
 
 /** Keeps store downloads alive while the student uses other apps. */
 class StoreDownloadService : Service() {
+
+    // Whenever a network comes back, anything left half-downloaded resumes
+    // on its own — weak-link students never babysit a download.
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            StoreDownloader.resumeUnfinished(this@StoreDownloadService)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT >= 26) {
@@ -25,6 +36,12 @@ class StoreDownloadService : Service() {
                     NotificationManager.IMPORTANCE_LOW,
                 ),
             )
+        }
+        try {
+            getSystemService(ConnectivityManager::class.java)
+                ?.registerDefaultNetworkCallback(networkCallback)
+        } catch (e: Exception) {
+            // Auto-resume is a resilience bonus; downloads still work without it.
         }
     }
 
@@ -52,6 +69,12 @@ class StoreDownloadService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            getSystemService(ConnectivityManager::class.java)
+                ?.unregisterNetworkCallback(networkCallback)
+        } catch (e: Exception) {
+            // Already unregistered; nothing to clean up.
+        }
         if (StoreDownloader.onAllIdle != null) StoreDownloader.onAllIdle = null
         super.onDestroy()
     }

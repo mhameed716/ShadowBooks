@@ -161,12 +161,16 @@ fi
 if [[ "$ASSET_MODE" == "light" ]]; then
   BUNDLED="$ROOT_DIR/app/build/generated/bundled-assets"
   rm -rf "$BUNDLED"
-  mkdir -p "$BUNDLED/reviewed" "$BUNDLED/books/quran-audio" "$BUNDLED/licenses"
+  mkdir -p "$BUNDLED/reviewed" "$BUNDLED/books/quran-audio" "$BUNDLED/licenses" "$BUNDLED/books/study/exams"
   cp "$ROOT_DIR/app/src/main/assets/reviewed/pupil6-ar.json" "$BUNDLED/reviewed/"
   cp "$ROOT_DIR/app/build/generated/study-assets/reviewed/pupil6-ar.pdf" "$BUNDLED/reviewed/"
   cp "$BOOKS_DIR/quran-audio/"*.mp3 "$BUNDLED/books/quran-audio/"
   cp "$ROOT_DIR/app/src/main/assets/licenses/Noto-Naskh-OFL.txt" "$BUNDLED/licenses/"
-  echo "Light bundled assets ready: pupil translation pair + both Quran recitations."
+  # The two advisory guides stay bundled by demand: a student must be able to
+  # read how to use the ministry models before downloading anything at all.
+  cp "$ROOT_DIR/app/src/main/assets/books/study/exams/كيف_تستفيد_من_النماذج_الوزارية.pdf" "$BUNDLED/books/study/exams/"
+  cp "$ROOT_DIR/app/src/main/assets/books/study/exams/الفرق_بين_النموذج_وبنك_الأسئلة.pdf" "$BUNDLED/books/study/exams/"
+  echo "Light bundled assets ready: pupil translation pair, both Quran recitations, and the two ministry-model guides."
   exit 0
 fi
 

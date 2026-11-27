@@ -93,6 +93,41 @@ for entry in catalog["entries"]:
     print(json.dumps(entry, ensure_ascii=False))
 ' "$CATALOG")
 
+# Cover thumbnails (polish): uploaded under their catalog names too. A cover
+# failure never blocks content publishing — the app falls back gracefully and
+# the next publish retries, since the remote digest will not match.
+covers_uploaded=0; covers_skipped=0
+while IFS= read -r entry; do
+  cover="$(printf '%s' "$entry" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("cover") or "")')"
+  [[ -z "$cover" ]] && continue
+  csize="$(printf '%s' "$entry" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("coverSize") or "")')"
+  csha="$(printf '%s' "$entry" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("coverSha256") or "")')"
+  remote_size="$(remote_field "$cover" 2 || true)"
+  remote_digest="$(remote_field "$cover" 3 || true)"
+  if [[ "$remote_size" == "$csize" && "${remote_digest#sha256:}" == "$csha" ]]; then
+    covers_skipped=$((covers_skipped + 1))
+    continue
+  fi
+  local_cover="$STAGING/covers/$cover"
+  if [[ ! -f "$local_cover" ]]; then
+    echo "WARNING: cover missing locally, skipped: $cover" >&2
+    continue
+  fi
+  cp "$local_cover" "$UPLOAD_DIR/$cover"
+  if gh release upload "$TAG" "$UPLOAD_DIR/$cover" --clobber --repo "$REPO"; then
+    covers_uploaded=$((covers_uploaded + 1))
+  else
+    echo "WARNING: cover upload failed: $cover" >&2
+  fi
+  rm -f "$UPLOAD_DIR/$cover"
+done < <(python3 -c '
+import json, sys
+catalog = json.load(open(sys.argv[1], encoding="utf-8"))
+for entry in catalog["entries"]:
+    print(json.dumps(entry, ensure_ascii=False))
+' "$CATALOG")
+echo "Covers: $covers_uploaded uploaded, $covers_skipped unchanged."
+
 if [[ "$failed" -gt 0 ]]; then
   echo "ERROR: $failed store file(s) failed; catalog.json was NOT updated." >&2
   exit 1
@@ -114,6 +149,7 @@ import json, sys
 catalog = json.load(open(sys.argv[1], encoding="utf-8"))
 for entry in catalog["entries"]:
     print(entry.get("asset") or "")
+    print(entry.get("cover") or "")
 ' "$CATALOG"
   echo "catalog.json"
 } | grep -v '^$' | LC_ALL=C sort -u > "$EXPECTED_FILE"

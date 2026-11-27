@@ -27,21 +27,24 @@ sealed interface StoreDownloadState {
 }
 
 /**
- * Fast, resumable downloads for store content. Each file is split into
- * segments that are fetched in parallel (several HTTP Range connections at
- * once, like the standalone downloader app), every request starting from the
- * permanent release URL so it receives a fresh signed URL. Per-segment
- * progress is persisted beside the partial file, so pauses, failures and
- * process death resume exactly where they stopped. The assembled file is
- * SHA-256 verified and only then moved to its catalog destination.
+ * Fast, resumable downloads for store content, built to finish on any link —
+ * from a 20 KB/s trickle to fibre. Each file is split into segments fetched
+ * in parallel (several HTTP Range connections at once), every request
+ * starting from the permanent release URL so it receives a fresh signed URL.
+ * Request sizes adapt to the measured speed: tiny 32 KB bites when the link
+ * crawls (so a drop costs a second, not a minute), growing past 2 MB when it
+ * flies. Transient failures retry patiently forever with backoff — only a
+ * genuinely missing file fails fast — and a request is abandoned only after
+ * total silence, never for slowness. Per-segment progress is persisted beside
+ * the partial file, so pauses, failures and process death resume exactly
+ * where they stopped; the assembled file is SHA-256 verified and only then
+ * moved to its catalog destination.
  */
 object StoreDownloader {
     private const val DOWNLOAD_BASE =
         "https://github.com/mhameed716/ShadowBooks/releases/download/store/"
-    private const val CHUNK_SIZE = 1024 * 1024
     private const val SEGMENT_SIZE = 5L * 1024 * 1024
     private const val MAX_PARALLEL_SEGMENTS = 4
-    private const val MAX_CHUNK_ATTEMPTS = 6
 
     val states = mutableStateMapOf<String, StoreDownloadState>()
 
@@ -50,6 +53,64 @@ object StoreDownloader {
     private val pauseFlags = ConcurrentHashMap<String, AtomicBoolean>()
     private val cancelled = ConcurrentHashMap.newKeySet<String>()
     private val connections = ConcurrentHashMap<String, MutableSet<HttpURLConnection>>()
+    private val speedTrackers = ConcurrentHashMap<String, SpeedTracker>()
+
+    /** Smoothed download speed (bytes/sec) for the UI's remaining-time label. */
+    fun speedBps(dest: String): Long = speedTrackers[dest]?.bps ?: 0L
+
+    private class SpeedTracker {
+        @Volatile
+        var bps: Long = 0L
+            private set
+
+        private var lastTime = 0L
+        private var lastDone = 0L
+
+        @Synchronized
+        fun record(done: Long) {
+            val now = System.currentTimeMillis()
+            if (lastTime == 0L) {
+                lastTime = now
+                lastDone = done
+                return
+            }
+            val elapsed = now - lastTime
+            val bytes = done - lastDone
+            if (elapsed >= 400L && bytes >= 0L) {
+                val instant = bytes * 1000L / elapsed
+                bps = if (bps == 0L) instant else (bps * 3 + instant) / 4
+                lastTime = now
+                lastDone = done
+            }
+        }
+    }
+
+    /** Next request size for a worker achieving [bps] bytes/sec. */
+    private fun chunkSizeFor(bps: Long): Int = when {
+        bps <= 0L -> 256 * 1024
+        bps < 60_000L -> 32 * 1024
+        bps < 150_000L -> 64 * 1024
+        bps < 400_000L -> 256 * 1024
+        bps < 1_000_000L -> 512 * 1024
+        bps < 2_500_000L -> 1024 * 1024
+        bps < 5_000_000L -> 2 * 1024 * 1024
+        else -> 4 * 1024 * 1024
+    }
+
+    /** Re-enqueue anything left half-downloaded (process death, outage...). */
+    fun resumeUnfinished(context: Context) {
+        val appContext = context.applicationContext
+        executor.execute {
+            try {
+                for (entry in StoreContent.cachedCatalog(appContext)) {
+                    if (StoreContent.isInstalled(appContext, entry)) continue
+                    if (partialBytes(appContext, entry) > 0L) enqueue(appContext, entry)
+                }
+            } catch (e: Exception) {
+                // Nothing resumable; the store UI still offers manual retry.
+            }
+        }
+    }
 
     @Volatile
     var onAllIdle: (() -> Unit)? = null
@@ -186,6 +247,13 @@ object StoreDownloader {
                     partialBytes(context, entry), entry.size,
                 )
             }
+        } catch (e: FatalDownload) {
+            // The file genuinely is not there (or its size conflicts); retrying
+            // would never help, and the partial cannot be trusted.
+            deletePartial(context, entry)
+            states[dest] = StoreDownloadState.Failed(
+                e.message?.takeIf { it.isNotBlank() } ?: "تعذر إكمال التنزيل.",
+            )
         } catch (e: Exception) {
             states[dest] = if (pauseFlags[dest]?.get() == true) {
                 StoreDownloadState.Paused(partialBytes(context, entry), entry.size)
@@ -196,6 +264,7 @@ object StoreDownloader {
             }
         } finally {
             connections.remove(dest)
+            speedTrackers.remove(dest)
             active.remove(dest)
             if (active.isEmpty()) onAllIdle?.invoke()
         }
@@ -305,21 +374,36 @@ object StoreDownloader {
         try {
             var position = progress.segmentStart(index) + progress.done[index]
             val segmentEnd = progress.segmentEnd(index)
+            // This worker's own measured pace drives its next request size:
+            // tiny bites on a crawl, multi-MB gulps on a fast link.
+            var windowStart = System.currentTimeMillis()
+            var windowBytes = 0L
+            var workerBps = 0L
             RandomAccessFile(part, "rw").use { output ->
                 while (position < segmentEnd) {
                     checkStopped(entry)
                     if (failure.get() != null) return
-                    val end = minOf(segmentEnd - 1, position + CHUNK_SIZE - 1)
+                    val want = chunkSizeFor(workerBps).toLong()
+                    val end = minOf(segmentEnd - 1, position + want - 1)
                     val chunk = downloadRangeWithRetries(entry, position, end)
                     checkStopped(entry)
                     output.seek(position)
                     output.write(chunk)
                     position += chunk.size
+                    windowBytes += chunk.size
+                    val now = System.currentTimeMillis()
+                    if (now - windowStart >= 1_500L) {
+                        workerBps = windowBytes * 1000L / (now - windowStart)
+                        windowStart = now
+                        windowBytes = 0L
+                    }
                     val doneNow = totalDone.addAndGet(chunk.size.toLong())
                     synchronized(stateLock) {
                         progress.done[index] = position - progress.segmentStart(index)
                         persistProgress(context, entry, progress)
                     }
+                    speedTrackers.computeIfAbsent(entry.dest) { SpeedTracker() }
+                        .record(doneNow)
                     states[entry.dest] = StoreDownloadState.Running(doneNow, entry.size)
                 }
             }
@@ -338,22 +422,28 @@ object StoreDownloader {
         }
     }
 
+    /**
+     * Patiently retries a range until it lands — a weak link must never kill
+     * a download. Backoff grows to a 60 s ceiling and the loop only ends on
+     * success, a user stop, or a fatal answer from the server.
+     */
     private fun downloadRangeWithRetries(
         entry: StoreEntry,
         start: Long,
         end: Long,
     ): ByteArray {
-        var lastError: IOException? = null
-        for (attempt in 1..MAX_CHUNK_ATTEMPTS) {
+        var attempt = 0
+        while (true) {
             checkStopped(entry)
+            attempt++
             try {
                 return downloadRangeOnce(entry, start, end)
             } catch (e: PausedDownload) {
                 throw e
+            } catch (e: FatalDownload) {
+                throw e
             } catch (e: IOException) {
-                lastError = e
-                if (attempt == MAX_CHUNK_ATTEMPTS) break
-                val waitMillis = minOf(15_000L, attempt * 2_000L)
+                val waitMillis = minOf(60_000L, 1_000L shl minOf(attempt, 6))
                 var waited = 0L
                 while (waited < waitMillis) {
                     checkStopped(entry)
@@ -362,7 +452,6 @@ object StoreDownloader {
                 }
             }
         }
-        throw lastError ?: IOException("تعذر تنزيل أحد أجزاء الملف.")
     }
 
     private fun downloadRangeOnce(entry: StoreEntry, start: Long, end: Long): ByteArray {
@@ -385,7 +474,12 @@ object StoreDownloader {
                     currentUrl = URL(URL(currentUrl), location).toString()
                     continue
                 }
-                if (code == 416) throw IOException("رفض الخادم استئناف هذا الجزء.")
+                if (code == 404 || code == 410) {
+                    throw FatalDownload("الملف غير متاح حاليًا على الخادم.")
+                }
+                if (code == 416) {
+                    throw FatalDownload("تعارض حجم الملف مع نسخة الخادم.")
+                }
                 if (code != 206) throw IOException("رفض الخادم طلب الجزء (HTTP $code).")
                 val contentRange = connection.getHeaderField("Content-Range")
                 if (contentRange == null || !contentRange.startsWith("bytes $start-")) {
@@ -437,4 +531,7 @@ object StoreDownloader {
     }
 
     private class PausedDownload : Exception()
+
+    /** A server answer no retry can fix (missing or conflicting file). */
+    private class FatalDownload(message: String) : IOException(message)
 }
