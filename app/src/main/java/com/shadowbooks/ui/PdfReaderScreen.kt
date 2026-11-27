@@ -71,7 +71,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
-fun PdfReaderScreen(volume: BookVolume, onBack: () -> Unit) {
+fun PdfReaderScreen(
+    volume: BookVolume,
+    initialPage: Int = 0,
+    onPageChanged: (Int) -> Unit = {},
+    onBack: () -> Unit,
+) {
     key(volume.fileName) {
         val context = LocalContext.current.applicationContext
         var night by rememberSaveable { mutableStateOf(false) }

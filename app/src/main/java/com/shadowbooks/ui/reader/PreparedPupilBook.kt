@@ -41,7 +41,7 @@ internal class PreparedPupilBook(
         private val PUPIL_ORIGINAL_ONLY = setOf(1, 2, 4, 54, 68, 80)
 
         /** One prepared translation pair per English volume, when present in the APK. */
-        internal data class Companion(
+        internal data class Spec(
             val sourceFile: String,
             val pdf: String,
             val index: String,
@@ -49,8 +49,8 @@ internal class PreparedPupilBook(
         )
 
         internal val COMPANIONS = listOf(
-            Companion(SOURCE, PDF, INDEX, PUPIL_ORIGINAL_ONLY),
-            Companion(
+            Spec(SOURCE, PDF, INDEX, PUPIL_ORIGINAL_ONLY),
+            Spec(
                 "english-workbook.pdf",
                 "reviewed/workbook6-ar.pdf",
                 "reviewed/workbook6-ar.json",
@@ -61,7 +61,7 @@ internal class PreparedPupilBook(
         fun isCandidate(fileName: String, trial: Boolean) =
             !trial && COMPANIONS.any { it.sourceFile == fileName }
 
-        fun companionFor(fileName: String): Companion? =
+        fun companionFor(fileName: String): Spec? =
             COMPANIONS.firstOrNull { it.sourceFile == fileName }
 
         fun digest(file: File): String {

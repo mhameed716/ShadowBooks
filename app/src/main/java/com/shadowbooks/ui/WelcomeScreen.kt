@@ -103,6 +103,25 @@ private const val ChannelCodeDigest =
 private const val GatePreferences = "welcome_gate"
 private const val GateUnlockedKey = "channel_unlocked"
 
+private fun gatePreferences(context: Context) =
+    context.getSharedPreferences(GatePreferences, Context.MODE_PRIVATE)
+
+/** True when the channel code already unlocked THIS app version on this device. */
+internal fun isChannelUnlocked(context: Context): Boolean =
+    gatePreferences(context).getInt("channel_unlocked_for", -1) == BuildConfig.VERSION_CODE
+
+/** One correct code unlocks the current app version only; the next update re-locks. */
+internal fun markChannelUnlocked(context: Context) {
+    gatePreferences(context).edit()
+        .putInt("channel_unlocked_for", BuildConfig.VERSION_CODE)
+        .apply()
+}
+
+/** Settings action: lock the gate again so the next entry asks for the code. */
+internal fun lockChannelGate(context: Context) {
+    gatePreferences(context).edit().remove("channel_unlocked_for").apply()
+}
+
 /** Checks the typed code against the stored digest; the readable code is never stored. */
 private fun channelCodeMatches(input: String): Boolean {
     val normalized = input.trim().uppercase()
