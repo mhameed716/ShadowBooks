@@ -29,9 +29,19 @@ def main() -> int:
     parser.add_argument("--apk", required=True)
     args = parser.parse_args()
 
+    def true_name(name: str) -> str:
+        # APK zips store non-ASCII entry names as raw UTF-8 bytes without the
+        # UTF-8 flag, so Python hands them back decoded as cp437; undo that.
+        try:
+            return name.encode("cp437").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return name
+
     with ZipFile(args.apk) as archive:
-        names = set(archive.namelist())
-        sizes = {info.filename: info.file_size for info in archive.infolist()}
+        names = {true_name(name) for name in archive.namelist()}
+        sizes = {
+            true_name(info.filename): info.file_size for info in archive.infolist()
+        }
 
     missing = sorted(REQUIRED - names)
     if missing:
