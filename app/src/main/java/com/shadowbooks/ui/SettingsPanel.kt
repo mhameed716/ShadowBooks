@@ -144,7 +144,7 @@ fun SettingsSheet(onDismiss: () -> Unit) {
                                     reminderMinute,
                                 )
                             } else {
-                                "متوقف",
+                                "متوقف"
                             },
                             color = SettingsMuted,
                             fontFamily = SettingsFont,
