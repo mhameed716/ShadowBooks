@@ -24,7 +24,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -61,15 +64,23 @@ fun VolumeChooserScreen(
             .systemBarsPadding()
             .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
-        TextButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.Filled.ArrowBack,
-                contentDescription = "رجوع",
-                tint = Color(0xFF83DFFF),
-                modifier = Modifier.size(19.dp),
-            )
-            Spacer(Modifier.width(5.dp))
-            Text("الرفوف", color = Color(0xFF83DFFF), fontSize = 12.sp)
+        var showSettings by remember { mutableStateOf(false) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Filled.ArrowBack,
+                    contentDescription = "رجوع",
+                    tint = Color(0xFF83DFFF),
+                    modifier = Modifier.size(19.dp),
+                )
+                Spacer(Modifier.width(5.dp))
+                Text("الرفوف", color = Color(0xFF83DFFF), fontSize = 12.sp)
+            }
+            Spacer(Modifier.weight(1f))
+            SpinningGearButton(onClick = { showSettings = true })
+        }
+        if (showSettings) {
+            SettingsSheet(onDismiss = { showSettings = false })
         }
 
         Spacer(Modifier.height(22.dp))

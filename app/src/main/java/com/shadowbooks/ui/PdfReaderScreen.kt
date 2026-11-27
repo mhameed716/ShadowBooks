@@ -127,13 +127,32 @@ fun PdfReaderScreen(volume: BookVolume, onBack: () -> Unit) {
 }
 
 @Composable
-private fun OpenBook(document: ReaderDocument, volume: BookVolume, night: Boolean, onNight: () -> Unit, onBack: () -> Unit) {
+private fun OpenBook(
+    document: ReaderDocument,
+    volume: BookVolume,
+    night: Boolean,
+    onNight: () -> Unit,
+    onBack: () -> Unit,
+    initialPage: Int = 0,
+    onPageChanged: (Int) -> Unit = {},
+) {
     val list = rememberLazyListState()
     val count = document.pageCount
     val aspect = document.firstAspect
     val saver = remember(list, count, aspect) { ReaderViewport.saver(list, count, aspect) }
     // A fresh renderer on foregrounding the same volume is not a new reading session.
     val view = rememberSaveable(volume.fileName, count, list, saver = saver) { ReaderViewport(list, count, aspect) }
+    // «متابعة القراءة»: land on the remembered page once per opened document.
+    LaunchedEffect(document) {
+        if (initialPage in 1 until count) {
+            try {
+                view.jump(initialPage)
+            } catch (e: Exception) {
+                // A failed jump only means reading starts at the first page.
+            }
+        }
+    }
+    LaunchedEffect(view.currentIndex) { onPageChanged(view.currentIndex) }
     var arabicPages by rememberSaveable { mutableStateOf(intArrayOf()) }
     val pageIndex = view.currentIndex
     val hasArabic = document.arabicText(pageIndex) != null

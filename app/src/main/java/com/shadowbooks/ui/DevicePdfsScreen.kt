@@ -54,6 +54,18 @@ import com.shadowbooks.R
 import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.DevicePdfEntry
 import com.shadowbooks.data.DevicePdfLibrary
+import com.shadowbooks.data.Favorites
+import com.shadowbooks.store.StoreCovers
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 
 private val DevicePdfNight = Color(0xFF071326)
 private val DevicePdfCardColor = Color(0xFF101E32)
@@ -73,6 +85,9 @@ fun DevicePdfsScreen(
 ) {
     val context = LocalContext.current
     var entries by remember(context) { mutableStateOf(DevicePdfLibrary.load(context)) }
+    var showSettings by remember { mutableStateOf(false) }
+    var removeTarget by remember { mutableStateOf<DevicePdfEntry?>(null) }
+    LaunchedEffect(Unit) { Favorites.load(context) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { picked ->
         if (picked.isNotEmpty()) {
@@ -114,11 +129,15 @@ fun DevicePdfsScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 13.dp),
                 horizontalAlignment = Alignment.Start,
             ) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.library_wordmark),
-                    contentDescription = "SHADOWBOOKS",
-                    modifier = Modifier.width(152.dp).height(30.dp),
-                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(R.drawable.library_wordmark),
+                        contentDescription = "SHADOWBOOKS",
+                        modifier = Modifier.width(152.dp).height(30.dp),
+                    )
+                    Spacer(Modifier.weight(1f))
+                    SpinningGearButton(onClick = { showSettings = true })
+                }
                 Spacer(Modifier.height(16.dp))
                 Text(
                     stringResource(R.string.device_pdf_title),
@@ -188,27 +207,30 @@ fun DevicePdfsScreen(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                 )
+                val sortedEntries = remember(entries, Favorites.keys) {
+                    entries.sortedByDescending { Favorites.isFavorite("device:${it.uri}") }
+                }
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(9.dp),
                     contentPadding = PaddingValues(bottom = 14.dp),
                 ) {
-                    items(entries, key = DevicePdfEntry::uri) { entry ->
-                        DevicePdfCard(
-                            entry = entry,
-                            onOpen = { onOpen(entry.asVolume()) },
-                            onRemove = {
-                                val updated = entries.filterNot { it.uri == entry.uri }
-                                DevicePdfLibrary.save(context, updated)
-                                entries = updated
-                                runCatching {
-                                    context.contentResolver.releasePersistableUriPermission(
-                                        Uri.parse(entry.uri),
-                                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    items(sortedEntries.chunked(2), key = { row -> row.first().uri }) { row ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        ) {
+                            row.forEach { entry ->
+                                Box(Modifier.weight(1f)) {
+                                    DevicePdfCard(
+                                        entry = entry,
+                                        onOpen = { onOpen(entry.asVolume()) },
+                                        onRemove = { removeTarget = entry },
                                     )
                                 }
-                            },
-                        )
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -222,49 +244,106 @@ fun DevicePdfsScreen(
             onStore = onStore,
         )
     }
+
+    removeTarget?.let { entry ->
+        ConfirmTwiceDialog(
+            what = entry.displayName,
+            note = "سيُزال من قائمة ملفات الهاتف فقط؛ الملف نفسه يبقى في هاتفك.",
+            confirmLabel = "نعم، أزِل",
+            onDismiss = { removeTarget = null },
+            onConfirmed = {
+                removeTarget = null
+                val updated = entries.filterNot { it.uri == entry.uri }
+                DevicePdfLibrary.save(context, updated)
+                entries = updated
+                runCatching {
+                    context.contentResolver.releasePersistableUriPermission(
+                        Uri.parse(entry.uri),
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+            },
+        )
+    }
+
+    if (showSettings) {
+        SettingsSheet(onDismiss = { showSettings = false })
+    }
 }
 
 @Composable
 private fun DevicePdfCard(entry: DevicePdfEntry, onOpen: () -> Unit, onRemove: () -> Unit) {
+    val context = LocalContext.current
+    val favoriteKey = "device:${entry.uri}"
+    val favorite = Favorites.isFavorite(favoriteKey)
+    var cover by remember(entry.uri) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(entry.uri) {
+        cover = StoreCovers.loadUri(context, Uri.parse(entry.uri), entry.readerKey)
+    }
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(15.dp),
         colors = CardDefaults.cardColors(containerColor = DevicePdfCardColor),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Filled.Description,
-                contentDescription = null,
-                tint = DevicePdfCyan,
-                modifier = Modifier.size(25.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
+        Column(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(1.45f).background(Color(0xFF1B2C47)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val bitmap = cover
+                if (bitmap != null) {
+                    Image(
+                        bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.MenuBook,
+                        contentDescription = null,
+                        tint = DevicePdfCyan,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
+                IconButton(
+                    onClick = { Favorites.toggle(context, favoriteKey) },
+                    modifier = Modifier.align(Alignment.TopEnd).size(34.dp),
+                ) {
+                    Icon(
+                        if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                        contentDescription = if (favorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
+                        tint = if (favorite) Color(0xFFFFC86B) else Color.White,
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 4.dp)) {
                 Text(
                     entry.displayName,
                     color = Color.White,
                     fontFamily = DevicePdfFont,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    stringResource(R.string.device_pdf_open_hint),
-                    color = Color(0xFF9EB2C9),
-                    fontFamily = DevicePdfFont,
-                    fontSize = 11.sp,
-                )
-            }
-            IconButton(onClick = onRemove) {
-                Icon(
-                    Icons.Filled.DeleteOutline,
-                    contentDescription = stringResource(R.string.device_pdf_remove, entry.displayName),
-                    tint = Color(0xFFE7A0A0),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.device_pdf_open_hint),
+                        color = Color(0xFF9EB2C9),
+                        fontFamily = DevicePdfFont,
+                        fontSize = 11.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onRemove) {
+                        Icon(
+                            Icons.Filled.DeleteOutline,
+                            contentDescription = stringResource(R.string.device_pdf_remove, entry.displayName),
+                            tint = Color(0xFFE7A0A0),
+                        )
+                    }
+                }
             }
         }
     }

@@ -145,10 +145,24 @@ object StoreContent {
         localFile(context, entry.dest).delete()
         File(localFile(context, entry.dest).path + ".part").delete()
         File(localFile(context, entry.dest).path + ".parts").delete()
+        detach(context, entry)
+    }
+
+    /** Unregisters a file (moved to the trash, say) without touching its bytes. */
+    fun detach(context: Context, entry: StoreEntry) {
         val registry = registry(context)
         if (registry.remove(entry.dest) != null) saveRegistry(context, registry)
         StoreDownloader.forget(entry.dest)
         installedVersion++
+    }
+
+    /** A book is openable when every volume is downloaded or bundled in the APK. */
+    fun isBookAvailable(context: Context, book: Book): Boolean {
+        val volumes = book.volumes.ifEmpty { listOf(BookVolume(book.title, book.fileName)) }
+        return volumes.all { volume ->
+            isVolumeDownloaded(context, volume.fileName) ||
+                isBundled(context, "books/${volume.fileName}")
+        }
     }
 
     // ------------------------------------------------------------ catalog

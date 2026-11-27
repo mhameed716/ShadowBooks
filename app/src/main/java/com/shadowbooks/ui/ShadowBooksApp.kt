@@ -16,10 +16,14 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
+import com.shadowbooks.data.Favorites
+import com.shadowbooks.data.LastRead
+import com.shadowbooks.data.LastReadStore
 import com.shadowbooks.data.StudyMaterialKind
 import com.shadowbooks.store.PackImportRequest
 import com.shadowbooks.store.StoreContent
 import com.shadowbooks.store.StoreDownloader
+import com.shadowbooks.store.TrashBin
 
 private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader, Store }
 
@@ -50,6 +54,46 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     // Half-finished downloads pick themselves back up when the app opens.
     LaunchedEffect(Unit) {
         StoreDownloader.resumeUnfinished(context)
+        // The trash purges itself monthly: anything deleted over 30 days ago
+        // is erased forever at app start, as the settings promise.
+        TrashBin.purgeExpired(context)
+        Favorites.load(context)
+    }
+
+    // «متابعة القراءة»: every opened volume is remembered with its page.
+    LaunchedEffect(destination, volumeFile, readerContentUri) {
+        if (destination == AppDestination.Reader && volumeFile.isNotBlank()) {
+            val previous = LastReadStore.load(context)
+            val origin = when {
+                readerContentUri.isNotBlank() -> "device"
+                readerFromResources -> "resources"
+                readerFromStore -> "store"
+                else -> "library"
+            }
+            val catalogTitle = BookCatalog.books
+                .firstOrNull { candidate ->
+                    candidate.fileName == volumeFile ||
+                        candidate.volumes.any { it.fileName == volumeFile }
+                }
+                ?.let { candidate ->
+                    candidate.volumes.firstOrNull { it.fileName == volumeFile }?.title
+                        ?: candidate.title
+                }
+            LastReadStore.save(
+                context,
+                LastRead(
+                    fileName = volumeFile,
+                    title = readerTitle.ifBlank {
+                        catalogTitle ?: volumeFile.removeSuffix(".pdf").replace('_', ' ')
+                    },
+                    description = readerDescription,
+                    contentUri = readerContentUri,
+                    origin = origin,
+                    bookNumber = bookNumber,
+                    page = if (previous?.fileName == volumeFile) previous.page else 0,
+                ),
+            )
+        }
     }
 
     // A library pack opened from outside goes to the store for import — after
@@ -129,6 +173,36 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                 onOpenStore = {
                     storeSection = STORE_SECTION_LIBRARY
                     destination = AppDestination.Store
+                },
+                onSearchOpen = { volume, fromResources ->
+                    readerFromResources = fromResources
+                    readerFromStore = false
+                    readerFromDevicePdfs = false
+                    readerContentUri = volume.contentUri.orEmpty()
+                    volumeFile = volume.fileName
+                    readerTitle = volume.title
+                    readerDescription = volume.description
+                    if (!fromResources) {
+                        BookCatalog.books.firstOrNull { candidate ->
+                            candidate.fileName == volume.fileName ||
+                                candidate.volumes.any { it.fileName == volume.fileName }
+                        }?.let { bookNumber = it.number }
+                    }
+                    destination = AppDestination.Reader
+                },
+                onContinueReading = { volume, fromResources ->
+                    val last = LastReadStore.load(context)
+                    readerFromResources = fromResources
+                    readerFromStore = false
+                    readerFromDevicePdfs = last?.origin == "device"
+                    readerContentUri = last?.contentUri.orEmpty()
+                    volumeFile = volume.fileName
+                    readerTitle = volume.title
+                    readerDescription = volume.description
+                    if (last != null && last.origin == "library") {
+                        bookNumber = last.bookNumber
+                    }
+                    destination = AppDestination.Reader
                 },
             )
             AppDestination.Timetable -> TimetableScreen(
@@ -225,7 +299,13 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                     destination = AppDestination.Reader
                 },
             )
-            AppDestination.Reader -> PdfReaderScreen(volume = checkNotNull(readerVolume), onBack = back)
+            AppDestination.Reader -> PdfReaderScreen(
+                volume = checkNotNull(readerVolume),
+                initialPage = LastReadStore.load(context)
+                    ?.takeIf { it.fileName == volumeFile }?.page ?: 0,
+                onPageChanged = { page -> LastReadStore.updatePage(context, page) },
+                onBack = back,
+            )
         }
     }
 }

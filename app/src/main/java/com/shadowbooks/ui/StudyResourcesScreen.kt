@@ -50,10 +50,22 @@ import androidx.compose.ui.unit.sp
 import com.shadowbooks.R
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
+import com.shadowbooks.data.Favorites
 import com.shadowbooks.data.StudyMaterialCatalog
 import com.shadowbooks.data.StudyMaterialFile
 import com.shadowbooks.data.StudyMaterialKind
 import com.shadowbooks.store.StoreContent
+import com.shadowbooks.store.StoreCovers
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 
 private val StudyNight = Color(0xFF071326)
 private val StudyCard = Color(0xFF101E32)
@@ -85,6 +97,7 @@ fun StudyResourcesScreen(
     onOpen: (BookVolume) -> Unit,
 ) {
     val context = LocalContext.current
+    var showSettings by remember { mutableStateOf(false) }
     // Study files now arrive through the store; lists merge packaged assets
     // (trial sample only) with everything downloaded into the content folder.
     val installedVersion = StoreContent.installedVersion
@@ -172,11 +185,15 @@ fun StudyResourcesScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 13.dp),
                 horizontalAlignment = Alignment.Start,
             ) {
-                Image(
-                    painter = painterResource(R.drawable.library_wordmark),
-                    contentDescription = "SHADOWBOOKS",
-                    modifier = Modifier.width(152.dp).height(30.dp),
-                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(R.drawable.library_wordmark),
+                        contentDescription = "SHADOWBOOKS",
+                        modifier = Modifier.width(152.dp).height(30.dp),
+                    )
+                    Spacer(Modifier.weight(1f))
+                    SpinningGearButton(onClick = { showSettings = true })
+                }
                 Spacer(Modifier.height(16.dp))
                 Text(
                     "الملخصات والاختبارات",
@@ -244,19 +261,30 @@ fun StudyResourcesScreen(
                 }
             }
 
+            val subjectRows = remember(visibleSubjects) { visibleSubjects.chunked(2) }
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(9.dp),
                 contentPadding = PaddingValues(top = 3.dp, bottom = 16.dp),
             ) {
-                items(visibleSubjects, key = StudyResourceCategory::number) { subject ->
-                    val files = subject.files
-                    StudySubjectCard(subject.title, subject.number, kind, files) {
-                        when (files.size) {
-                            0 -> Unit
-                            1 -> openMaterial(files.single(), subject.title)
-                            else -> onChooserCategoryChange(subject.number)
+                items(subjectRows, key = { row -> row.first().number }) { row ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
+                        row.forEach { subject ->
+                            Box(Modifier.weight(1f)) {
+                                StudySubjectCard(subject.title, subject.number, kind, subject.files) {
+                                    val files = subject.files
+                                    when (files.size) {
+                                        0 -> Unit
+                                        1 -> openMaterial(files.single(), subject.title)
+                                        else -> onChooserCategoryChange(subject.number)
+                                    }
+                                }
+                            }
                         }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -277,15 +305,10 @@ fun StudyResourcesScreen(
             containerColor = Color(0xFF13233A),
             title = { Text(category.title, color = Color.White, fontFamily = StudyFont, fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    category.files.forEach { file ->
-                        TextButton(onClick = { openMaterial(file, category.title) }) {
-                            Icon(Icons.Filled.Description, contentDescription = null, tint = StudyCyan, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(file.title, color = Color.White, fontFamily = StudyFont, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
+                StudyFileGrid(
+                    files = category.files,
+                    onOpen = { file -> openMaterial(file, category.title) },
+                )
             },
             confirmButton = {},
         )
@@ -297,17 +320,116 @@ fun StudyResourcesScreen(
             containerColor = Color(0xFF13233A),
             title = { Text(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE, color = Color.White, fontFamily = StudyFont, fontWeight = FontWeight.Bold) },
             text = {
-                Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    goldenUnits.forEach { unit ->
-                        TextButton(onClick = { onOpen(unit.asVolume(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE)) }) {
-                            Icon(Icons.Filled.Description, contentDescription = null, tint = StudyCyan, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(unit.title, color = Color.White, fontFamily = StudyFont)
-                        }
-                    }
-                }
+                StudyFileGrid(
+                    files = goldenUnits,
+                    onOpen = { unit ->
+                        onOpen(unit.asVolume(StudyMaterialCatalog.GOLDEN_ENGLISH_TITLE))
+                    },
+                )
             },
             confirmButton = {},
+        )
+    }
+
+    if (showSettings) {
+        SettingsSheet(onDismiss = { showSettings = false })
+    }
+}
+
+/** Two-column grid of file cards with real covers; favourites (★) pinned first. */
+@Composable
+private fun StudyFileGrid(
+    files: List<StudyMaterialFile>,
+    onOpen: (StudyMaterialFile) -> Unit,
+) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { Favorites.load(context) }
+    val sorted = remember(files, Favorites.keys) {
+        files.sortedWith(
+            compareByDescending<StudyMaterialFile> {
+                Favorites.isFavorite("books/${it.assetPath}")
+            }.thenBy { it.title },
+        )
+    }
+    Column(
+        modifier = Modifier.heightIn(max = 430.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        sorted.chunked(2).forEach { pair ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                pair.forEach { file ->
+                    Box(Modifier.weight(1f)) {
+                        StudyFileCard(file = file, onOpen = { onOpen(file) })
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StudyFileCard(file: StudyMaterialFile, onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val dest = "books/${file.assetPath}"
+    val favorite = Favorites.isFavorite(dest)
+    var cover by remember(dest) { mutableStateOf(StoreCovers.peek(dest)) }
+    LaunchedEffect(dest) {
+        if (cover == null) cover = StoreCovers.loadForDest(context, dest)
+    }
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF101E32))
+            .clickable(role = Role.Button, onClick = onOpen)
+            .padding(7.dp),
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(104.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF1B2C47)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val bitmap = cover
+            if (bitmap != null) {
+                Image(
+                    bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    Icons.Filled.Description,
+                    contentDescription = null,
+                    tint = StudyCyan,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            IconButton(
+                onClick = { Favorites.toggle(context, dest) },
+                modifier = Modifier.align(Alignment.TopEnd).size(32.dp),
+            ) {
+                Icon(
+                    if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                    contentDescription = if (favorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
+                    tint = if (favorite) Color(0xFFFFC86B) else Color.White,
+                    modifier = Modifier.size(19.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            file.title,
+            color = Color.White,
+            fontFamily = StudyFont,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -320,42 +442,65 @@ private fun StudySubjectCard(
     files: List<StudyMaterialFile>,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val enabled = files.isNotEmpty()
     val tileColor = SubjectTileColors[Math.floorMod(subjectNumber - 1, SubjectTileColors.size)]
+    val firstDest = files.firstOrNull()?.let { "books/${it.assetPath}" }
+    var cover by remember(firstDest) {
+        mutableStateOf(firstDest?.let { StoreCovers.peek(it) })
+    }
+    LaunchedEffect(firstDest) {
+        if (cover == null && firstDest != null) {
+            cover = StoreCovers.loadForDest(context, firstDest)
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(15.dp),
         colors = CardDefaults.cardColors(containerColor = StudyCard),
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // RTL: arrow at the right, text in the middle, and a generic document tile at the left.
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = if (enabled) "فتح ${kind.label} مادة $title" else null,
-                tint = if (enabled) StudyCyan else Color(0xFF71839A),
-                modifier = Modifier.size(21.dp),
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontFamily = StudyFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(3.dp))
-                Text(kind.label, color = StudyCyan, fontFamily = StudyFont, fontSize = 11.sp)
+        Column(Modifier.fillMaxWidth()) {
+            // The subject wears the real first-page cover of its first file.
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(1.55f).background(tileColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                val bitmap = cover
+                if (bitmap != null) {
+                    Image(
+                        bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.Description,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(34.dp),
+                    )
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp)) {
                 Text(
-                    if (enabled) "${files.size} ملف جاهز" else "بانتظار الملف",
+                    title,
+                    color = Color.White,
+                    fontFamily = StudyFont,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    if (enabled) "${kind.label} · ${files.size} ملف جاهز" else "${kind.label} · بانتظار الملف",
                     color = if (enabled) Color(0xFF91E6C2) else Color(0xFF9DADC0),
                     fontFamily = StudyFont,
                     fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-            }
-            Spacer(Modifier.width(12.dp))
-            Box(
-                Modifier.size(54.dp).clip(RoundedCornerShape(12.dp)).background(tileColor),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.Description, contentDescription = null, tint = Color.White, modifier = Modifier.size(27.dp))
             }
         }
     }

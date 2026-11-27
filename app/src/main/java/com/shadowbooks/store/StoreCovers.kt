@@ -6,12 +6,14 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.util.LruCache
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -29,7 +31,6 @@ object StoreCovers {
     private const val COVER_BASE =
         "https://github.com/mhameed716/ShadowBooks/releases/download/store/"
     private const val COVER_WIDTH = 360
-    private const val MAX_BUNDLED_RENDER_BYTES = 5_000_000L
 
     private val memory = LruCache<String, Bitmap>(48)
 
@@ -38,34 +39,110 @@ object StoreCovers {
     suspend fun load(context: Context, entry: StoreEntry): Bitmap? =
         withContext(Dispatchers.IO) {
             memory.get(entry.dest)?.let { return@withContext it }
-            val bitmap = renderLocal(context, entry)
-                ?: decodeCached(context, entry)
+            val bitmap = decodeCached(context, entry)
+                ?: renderLocal(context, entry)
                 ?: downloadCover(context, entry)
+                ?: renderBundled(context, entry)
             if (bitmap != null) memory.put(entry.dest, bitmap)
+            bitmap
+        }
+
+    /** Cover for any catalog-shaped destination, even without a StoreEntry at hand. */
+    suspend fun loadForDest(context: Context, dest: String, sizeHint: Long = 0L): Bitmap? {
+        val known = StoreContent.cachedCatalog(context).firstOrNull { it.dest == dest }
+        return load(context, known ?: StoreEntry(dest, sizeHint, "", 0))
+    }
+
+    /** Cover for a user-picked device PDF, rendered from its content Uri. */
+    suspend fun loadUri(context: Context, uri: Uri, key: String): Bitmap? =
+        withContext(Dispatchers.IO) {
+            val cacheKey = "uri:$key"
+            memory.get(cacheKey)?.let { return@withContext it }
+            val cached = uriCacheFile(context, key)
+            val bitmap = (if (cached.isFile) {
+                try {
+                    BitmapFactory.decodeFile(cached.path)
+                } catch (e: Exception) {
+                    null
+                }
+            } else {
+                null
+            }) ?: renderUri(context, uri)?.also { rendered ->
+                try {
+                    cached.outputStream().use { output ->
+                        rendered.compress(Bitmap.CompressFormat.JPEG, 80, output)
+                    }
+                } catch (e: Exception) {
+                    // Cache misses only re-render next time.
+                }
+            }
+            if (bitmap != null) memory.put(cacheKey, bitmap)
             bitmap
         }
 
     private fun renderLocal(context: Context, entry: StoreEntry): Bitmap? {
         val local = StoreContent.localFile(context, entry.dest)
-        if (local.isFile) {
-            return renderFirstPage(local)?.also { cacheJpeg(context, entry, it) }
+        if (!local.isFile) return null
+        return renderFirstPage(local)?.also { cacheJpeg(context, entry, it) }
+    }
+
+    /** Last resort for APK-bundled files: copy out, render once, cache the JPEG. */
+    private fun renderBundled(context: Context, entry: StoreEntry): Bitmap? {
+        // Never copy a huge bundled book out just for a thumbnail; its
+        // publisher cover (or the placeholder) serves instead.
+        if (entry.size > 8_000_000L) return null
+        if (!StoreContent.isBundled(context, entry.dest)) return null
+        val temp = File(context.cacheDir, "cover-source-${entry.dest.hashCode()}.pdf")
+        return try {
+            context.assets.open(entry.dest).use { input ->
+                FileOutputStream(temp).use { output -> input.copyTo(output) }
+            }
+            renderFirstPage(temp)?.also { cacheJpeg(context, entry, it) }
+        } catch (e: Exception) {
+            null
+        } finally {
+            temp.delete()
         }
-        if (entry.size in 1..MAX_BUNDLED_RENDER_BYTES &&
-            StoreContent.isBundled(context, entry.dest)
-        ) {
-            val temp = File(context.cacheDir, "cover-source.pdf")
-            return try {
-                context.assets.open(entry.dest).use { input ->
-                    FileOutputStream(temp).use { output -> input.copyTo(output) }
+    }
+
+    private fun renderUri(context: Context, uri: Uri): Bitmap? = try {
+        context.contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
+            PdfRenderer(fd).use { renderer ->
+                if (renderer.pageCount < 1) {
+                    null
+                } else {
+                    renderer.openPage(0).use { page ->
+                        val height = (
+                            COVER_WIDTH * page.height / maxOf(page.width, 1)
+                            ).coerceIn(1, 720)
+                        val bitmap = Bitmap.createBitmap(
+                            COVER_WIDTH,
+                            height,
+                            Bitmap.Config.ARGB_8888,
+                        )
+                        Canvas(bitmap).drawColor(Color.WHITE)
+                        page.render(
+                            bitmap,
+                            null,
+                            null,
+                            PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
+                        )
+                        bitmap
+                    }
                 }
-                renderFirstPage(temp)?.also { cacheJpeg(context, entry, it) }
-            } catch (e: Exception) {
-                null
-            } finally {
-                temp.delete()
             }
         }
-        return null
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun uriCacheFile(context: Context, key: String): File {
+        val dir = File(context.filesDir, "store/covers").apply { mkdirs() }
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+            .take(24)
+        return File(dir, "device-$digest.jpg")
     }
 
     private fun renderFirstPage(pdf: File): Bitmap? = try {
@@ -135,7 +212,9 @@ object StoreCovers {
 
     private fun cacheFile(context: Context, entry: StoreEntry): File {
         val dir = File(context.filesDir, "store/covers").apply { mkdirs() }
-        val key = entry.asset.ifBlank { entry.dest }.removeSuffix(".pdf")
+        val key = entry.asset.ifBlank { entry.dest }
+            .removeSuffix(".pdf")
+            .replace('/', '_')
         return File(dir, "$key.jpg")
     }
 

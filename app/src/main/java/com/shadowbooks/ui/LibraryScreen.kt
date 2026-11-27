@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Icon
@@ -58,7 +59,14 @@ import androidx.compose.ui.unit.sp
 import com.shadowbooks.R
 import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
+import com.shadowbooks.data.BookVolume
+import com.shadowbooks.data.LastReadStore
 import com.shadowbooks.store.StoreContent
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -86,10 +94,15 @@ fun LibraryScreen(
     onOpenTimetable: () -> Unit,
     onOpenDevicePdfs: () -> Unit,
     onOpenStore: () -> Unit,
+    onContinueReading: (BookVolume, Boolean) -> Unit = { _, _ -> },
+    onSearchOpen: (BookVolume, Boolean) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     // Refresh shelf badges when store downloads land.
     val installedVersion = StoreContent.installedVersion
+    var showSettings by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    val lastRead = remember(context, installedVersion) { LastReadStore.load(context) }
     val undownloaded = remember(context, installedVersion) {
         BookCatalog.books
             .filterNot { StoreContent.isBookDownloaded(context, it) }
@@ -118,9 +131,33 @@ fun LibraryScreen(
             ) {
                 LazyColumn(state = state, modifier = Modifier.width(width).fillMaxHeight()) {
                     if (pinHeader) {
-                        stickyHeader(key = "library-header") { LibraryHeader(unit, count) }
+                        stickyHeader(key = "library-header") {
+                            LibraryHeader(unit, count, onSettings = { showSettings = true })
+                        }
                     } else {
-                        item(key = "library-header") { LibraryHeader(unit, count) }
+                        item(key = "library-header") {
+                            LibraryHeader(unit, count, onSettings = { showSettings = true })
+                        }
+                    }
+                    item(key = "library-actions") {
+                        LibraryActionsBar(
+                            lastReadTitle = lastRead?.title,
+                            lastReadPage = lastRead?.page,
+                            onSearch = { showSearch = true },
+                            onContinue = {
+                                lastRead?.let { last ->
+                                    onContinueReading(
+                                        BookVolume(
+                                            title = last.title,
+                                            fileName = last.fileName,
+                                            description = last.description,
+                                            contentUri = last.contentUri.ifBlank { null },
+                                        ),
+                                        last.origin == "resources",
+                                    )
+                                }
+                            },
+                        )
                     }
                     itemsIndexed(shelves, key = { _, books -> books.first().number }) { index, books ->
                         ShelfRow(unit, ShelfTextures[index % ShelfTextures.size], books, undownloaded, onSelectBook)
@@ -137,14 +174,113 @@ fun LibraryScreen(
             )
         }
     }
+    if (showSettings) {
+        SettingsSheet(onDismiss = { showSettings = false })
+    }
+    if (showSearch) {
+        GlobalSearchDialog(
+            onDismiss = { showSearch = false },
+            onOpen = { volume, fromResources ->
+                showSearch = false
+                onSearchOpen(volume, fromResources)
+            },
+            onOpenStore = {
+                showSearch = false
+                onOpenStore()
+            },
+        )
+    }
+}
+
+/** Search + «متابعة القراءة» strip under the library header. */
+@Composable
+private fun LibraryActionsBar(
+    lastReadTitle: String?,
+    lastReadPage: Int?,
+    onSearch: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().height(46.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF101E32))
+                .border(1.dp, Color(0xFF30445D), RoundedCornerShape(14.dp))
+                .clickable(role = Role.Button, onClick = onSearch)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = null,
+                tint = Color(0xFF65D4FA),
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "ابحث في الكتب والملخصات والاختبارات...",
+                color = Color(0xFF9DADC0),
+                fontFamily = LibraryFont,
+                fontSize = 13.sp,
+            )
+        }
+        if (lastReadTitle != null) {
+            Row(
+                Modifier.fillMaxWidth().height(52.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF123E59))
+                    .border(1.dp, Color(0xFF65D4FA).copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+                    .clickable(role = Role.Button, onClick = onContinue)
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.MenuBook,
+                    contentDescription = null,
+                    tint = Color(0xFF65D4FA),
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "متابعة القراءة",
+                        color = Color(0xFF65D4FA),
+                        fontFamily = LibraryFont,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp,
+                    )
+                    Text(
+                        buildString {
+                            append(lastReadTitle)
+                            if (lastReadPage != null && lastReadPage > 0) {
+                                append(" · صفحة ${lastReadPage + 1}")
+                            }
+                        },
+                        color = Color(0xFFB9C6D8),
+                        fontFamily = LibraryFont,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
-private fun LibraryHeader(unit: Dp, count: String) {
+private fun LibraryHeader(unit: Dp, count: String, onSettings: () -> Unit = {}) {
     Box(Modifier.fillMaxWidth().heightIn(min = unit * 223).background(LibraryNight)) {
         Image(
             painterResource(R.drawable.library_header_sky), contentDescription = null,
             modifier = Modifier.matchParentSize(), contentScale = ContentScale.FillBounds,
+        )
+        // The spinning settings gear lives at the top-left of every screen.
+        SpinningGearButton(
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+            onClick = onSettings,
         )
         Row(Modifier.fillMaxWidth().padding(start = unit * 52, end = unit * 51, top = unit * 20, bottom = unit * 3)) {
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
