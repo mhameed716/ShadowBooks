@@ -28,6 +28,7 @@ import json
 import subprocess
 import sys
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +62,54 @@ def asset_name(dest: str) -> str:
     return "f-" + hashlib.sha256(dest.encode("utf-8")).hexdigest() + ".pdf"
 
 
+def cover_name(dest: str) -> str:
+    """Release asset name for a destination's cover thumbnail."""
+    return "c-" + hashlib.sha256(dest.encode("utf-8")).hexdigest() + ".jpg"
+
+
+_COVER_RENDERER = None
+
+
+def make_cover(pdf: Path, out: Path) -> tuple[int, str] | None:
+    """Render page 1 of a PDF as a small JPEG; return (size, sha256).
+
+    Optional polish: without PyMuPDF the store simply has no cover for the
+    file (the app falls back to rendering downloaded files locally).
+    """
+    global _COVER_RENDERER
+    if _COVER_RENDERER is None:
+        try:
+            import fitz  # PyMuPDF
+
+            _COVER_RENDERER = fitz
+        except Exception:
+            _COVER_RENDERER = False
+            print("PyMuPDF unavailable; covers skipped.")
+    if not _COVER_RENDERER:
+        return None
+    try:
+        fitz = _COVER_RENDERER
+        doc = fitz.open(pdf)
+        try:
+            if doc.page_count < 1:
+                return None
+            page = doc[0]
+            zoom = 360.0 / max(page.rect.width, 1.0)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+            try:
+                data = pixmap.tobytes("jpg", jpg_quality=72)
+            except TypeError:
+                data = pixmap.tobytes("jpg")
+        finally:
+            doc.close()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(data)
+        return len(data), hashlib.sha256(data).hexdigest()
+    except Exception as error:
+        print(f"Cover failed for {pdf.name}: {error}")
+        return None
+
+
 def is_pdf(path: Path) -> bool:
     if not path.is_file() or path.stat().st_size <= 1024:
         return False
@@ -76,7 +125,7 @@ def load_json(path: Path, default):
 
 
 def fetch_previous_revisions() -> dict[str, dict[str, object]]:
-    """Map dest -> {sha256, rev} from the published catalog, if one exists."""
+    """Map dest -> {sha256, rev, added} from the published catalog, if any."""
     try:
         request = urllib.request.Request(
             CATALOG_URL, headers={"User-Agent": "ShadowBooks-Store-Publish"}
@@ -87,6 +136,7 @@ def fetch_previous_revisions() -> dict[str, dict[str, object]]:
             str(entry["dest"]): {
                 "sha256": str(entry.get("sha256", "")),
                 "rev": int(entry.get("rev", 1)),
+                "added": str(entry.get("added", "")),
             }
             for entry in catalog.get("entries", [])
         }
@@ -154,15 +204,29 @@ def main() -> int:
         rev = int(old["rev"]) if old and old["sha256"] == digest else (
             int(old["rev"]) + 1 if old else 1
         )
-        entries.append(
-            {
-                "dest": dest,
-                "size": size,
-                "sha256": digest,
-                "rev": rev,
-                "asset": asset_name(dest),
-            }
+        # "added" stamps a destination the first time it ever enters the
+        # catalog (the app shows a red New badge for 14 days from it). Later
+        # revisions of the same file keep the original stamp.
+        added = (
+            str(old.get("added", ""))
+            if old
+            else datetime.now(timezone.utc).date().isoformat()
         )
+        entry: dict[str, object] = {
+            "dest": dest,
+            "size": size,
+            "sha256": digest,
+            "rev": rev,
+            "asset": asset_name(dest),
+        }
+        if added:
+            entry["added"] = added
+        cover = make_cover(pdf, STAGING / "covers" / cover_name(dest))
+        if cover is not None:
+            entry["cover"] = cover_name(dest)
+            entry["coverSize"] = cover[0]
+            entry["coverSha256"] = cover[1]
+        entries.append(entry)
         seen.add(dest)
 
     # Manually uploaded files are not staged locally; their declared placement
@@ -188,15 +252,21 @@ def main() -> int:
             rev = int(old["rev"])
         elif old:
             rev = max(rev, int(old["rev"]) + 1)
-        entries.append(
-            {
-                "dest": dest,
-                "size": size,
-                "sha256": digest,
-                "rev": rev,
-                "asset": asset_name(dest),
-            }
+        added = (
+            str(old.get("added", ""))
+            if old
+            else datetime.now(timezone.utc).date().isoformat()
         )
+        manual_entry: dict[str, object] = {
+            "dest": dest,
+            "size": size,
+            "sha256": digest,
+            "rev": rev,
+            "asset": asset_name(dest),
+        }
+        if added:
+            manual_entry["added"] = added
+        entries.append(manual_entry)
         seen.add(dest)
 
     entries.sort(key=lambda item: str(item["dest"]))

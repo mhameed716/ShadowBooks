@@ -19,6 +19,7 @@ import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.StudyMaterialKind
 import com.shadowbooks.store.PackImportRequest
 import com.shadowbooks.store.StoreContent
+import com.shadowbooks.store.StoreDownloader
 
 private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader, Store }
 
@@ -45,6 +46,11 @@ fun ShadowBooksApp(onExit: () -> Unit) {
     var storeSection by rememberSaveable { mutableIntStateOf(STORE_SECTION_LIBRARY) }
     val context = LocalContext.current
     val libraryScroll = rememberLazyListState()
+
+    // Half-finished downloads pick themselves back up when the app opens.
+    LaunchedEffect(Unit) {
+        StoreDownloader.resumeUnfinished(context)
+    }
 
     // A library pack opened from outside goes to the store for import — after
     // the welcome screen, never instead of it.

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Verify the store-based (light) APK bundles only what must stay on-device.
 
-Required: the pupil translation pair and both Quran recitations.
-Forbidden: every textbook PDF and every study PDF — those ship via the store.
+Required: the pupil translation pair, both Quran recitations, and the two
+ministry-model guides (students must read those before downloading anything).
+Forbidden: every other textbook PDF and study PDF — those ship via the store.
 """
 from __future__ import annotations
 
@@ -10,12 +11,17 @@ import argparse
 import sys
 from zipfile import ZipFile
 
+GUIDES = {
+    "assets/books/study/exams/كيف_تستفيد_من_النماذج_الوزارية.pdf",
+    "assets/books/study/exams/الفرق_بين_النموذج_وبنك_الأسئلة.pdf",
+}
+
 REQUIRED = {
     "assets/reviewed/pupil6-ar.pdf",
     "assets/reviewed/pupil6-ar.json",
     "assets/books/quran-audio/an-nur-abdul-basit-r1.mp3",
     "assets/books/quran-audio/an-nur-islam-sobhi.mp3",
-}
+} | GUIDES
 
 
 def main() -> int:
@@ -35,8 +41,11 @@ def main() -> int:
     forbidden = sorted(
         name
         for name in names
-        if name.startswith("assets/books/study/")
-        or (name.startswith("assets/books/") and name.endswith(".pdf"))
+        if name not in GUIDES
+        and (
+            name.startswith("assets/books/study/")
+            or (name.startswith("assets/books/") and name.endswith(".pdf"))
+        )
     )
     if forbidden:
         print("ERROR: light APK still bundles store content:")
@@ -46,8 +55,8 @@ def main() -> int:
 
     total = sum(sizes[name] for name in REQUIRED)
     print(
-        f"Light APK verified: translation + recitations bundled "
-        f"({total / 1_000_000:.1f} MB), no textbooks or study PDFs packaged."
+        f"Light APK verified: translation, recitations and the two guides bundled "
+        f"({total / 1_000_000:.1f} MB), no textbooks or other study PDFs packaged."
     )
     return 0
 

@@ -32,6 +32,11 @@ data class StoreEntry(
      * rewrites uploaded names with Arabic/spaces into dotted ones, so the app
      * must ask for exactly this name and never derive one from [dest]. */
     val asset: String = "",
+    /** ISO date (yyyy-MM-dd) the file first entered the catalog; the store
+     * shows a red "New" badge for 14 days from it. Blank when unknown. */
+    val added: String = "",
+    /** Release asset name of the cover thumbnail (first-page render), if any. */
+    val cover: String = "",
 ) {
     val fileName: String get() = dest.substringAfterLast('/')
     val isBook: Boolean get() = dest.startsWith("books/") && !dest.startsWith("books/study/")
@@ -55,7 +60,30 @@ object StoreContent {
 
     fun isInstalled(context: Context, entry: StoreEntry): Boolean {
         val file = localFile(context, entry.dest)
-        return file.isFile && file.length() == entry.size
+        return (file.isFile && file.length() == entry.size) ||
+            isBundled(context, entry.dest)
+    }
+
+    private val bundledListingCache = mutableMapOf<String, Set<String>>()
+
+    /**
+     * True when the file ships inside the APK itself at the same destination —
+     * the two ministry-model guides in the light edition, and everything in
+     * the complete edition. Such files open with no download at all.
+     */
+    fun isBundled(context: Context, dest: String): Boolean {
+        val dir = dest.substringBeforeLast('/', "")
+        if (dir.isEmpty()) return false
+        val names = synchronized(bundledListingCache) {
+            bundledListingCache.getOrPut(dir) {
+                try {
+                    context.assets.list(dir)?.toSet()
+                } catch (e: Exception) {
+                    null
+                } ?: emptySet()
+            }
+        }
+        return dest.substringAfterLast('/') in names
     }
 
     fun installedRev(context: Context, dest: String): Int =
@@ -165,8 +193,10 @@ object StoreContent {
                 val sha = item.optString("sha256")
                 val rev = item.optInt("rev", 1)
                 val asset = item.optString("asset")
+                val added = item.optString("added")
+                val cover = item.optString("cover")
                 if (dest.startsWith("books/") && size > 0 && sha.length == 64) {
-                    add(StoreEntry(dest, size, sha, rev, asset))
+                    add(StoreEntry(dest, size, sha, rev, asset, added, cover))
                 }
             }
         }

@@ -47,6 +47,9 @@ jobs:
           fi
           find "$staging" -type f | sort
 
+      - name: Install the cover renderer
+        run: pip install PyMuPDF
+
       - name: Build the store catalog
         run: python3 scripts/build_store_catalog.py
 
