@@ -77,6 +77,31 @@ object StoreContent {
             .filter { it.isFile && !it.name.endsWith(".part") }
             .sumOf { it.length() }
 
+    /**
+     * Every content file currently on disk, as catalog-shaped entries. Files
+     * that arrived via a library pack may have no catalog row yet (offline
+     * first launch), so their SHA is blank and the revision falls back to the
+     * install registry; the real catalog overrides them whenever it is known.
+     */
+    fun downloadedEntries(context: Context): List<StoreEntry> {
+        val root = contentRoot(context)
+        if (!root.isDirectory) return emptyList()
+        return root.walkTopDown()
+            .filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".importing") }
+            .map { it.relativeTo(root).invariantSeparatorsPath }
+            .filter { it.startsWith("books/") && it.endsWith(".pdf") }
+            .sorted()
+            .map { dest ->
+                StoreEntry(
+                    dest = dest,
+                    size = localFile(context, dest).length(),
+                    sha256 = "",
+                    rev = installedRev(context, dest),
+                )
+            }
+            .toList()
+    }
+
     internal fun markInstalled(context: Context, entry: StoreEntry) {
         val registry = registry(context)
         registry[entry.dest] = entry.rev
