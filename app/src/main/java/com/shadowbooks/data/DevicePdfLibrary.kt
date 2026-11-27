@@ -1,7 +1,9 @@
 package com.shadowbooks.data
 
+import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import org.json.JSONArray
 import org.json.JSONException
@@ -65,6 +67,53 @@ object DevicePdfLibrary {
             .putString(KEY_ENTRIES, array.toString())
             .apply()
     }
+
+    private const val KEY_HIDDEN = "hidden_discovered_v1"
+
+    /** URIs of discovered files the student removed from the list (files stay on the phone). */
+    fun loadHidden(context: Context): Set<String> =
+        context.applicationContext
+            .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .getStringSet(KEY_HIDDEN, emptySet())
+            ?.toSet()
+            ?: emptySet()
+
+    fun saveHidden(context: Context, hidden: Set<String>) {
+        context.applicationContext
+            .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet(KEY_HIDDEN, hidden)
+            .apply()
+    }
+
+    /**
+     * Every PDF the media store knows about, so the screen can show the
+     * phone's books without picking them one by one. Needs the storage
+     * permission on older Android; returns what it may on newer versions.
+     */
+    fun discover(context: Context): List<DevicePdfEntry> = runCatching {
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(MediaStore.Files.FileColumns._ID, MediaStore.Files.FileColumns.DISPLAY_NAME)
+        val selection = "${MediaStore.Files.FileColumns.MIME_TYPE} = ?"
+        val found = mutableListOf<DevicePdfEntry>()
+        context.applicationContext.contentResolver.query(
+            collection,
+            projection,
+            selection,
+            arrayOf("application/pdf"),
+            "${MediaStore.Files.FileColumns.DISPLAY_NAME} ASC",
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                val name = cursor.getString(nameCol)?.trim().orEmpty()
+                if (name.isEmpty()) continue
+                val uri = ContentUris.withAppendedId(collection, cursor.getLong(idCol))
+                found += DevicePdfEntry(uri.toString(), name)
+            }
+        }
+        found.distinctBy(DevicePdfEntry::uri)
+    }.getOrDefault(emptyList())
 
     fun displayName(context: Context, uri: Uri): String? = runCatching {
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->

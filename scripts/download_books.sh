@@ -72,10 +72,8 @@ for entry in "${BOOKS[@]}"; do
 done
 
 # Download study PDFs into app/build (ignored by Git/snapshots), where full variants package them as assets.
-# The light build needs only the reviewed pupil translation from the manifest.
-if [[ "$ASSET_MODE" == "light" ]]; then
-  python3 "$ROOT_DIR/scripts/download_study_assets.py" --only reviewed/pupil6-ar.pdf
-else
+# The reviewed pupil translation now ships in Git, so the light build fetches nothing here.
+if [[ "$ASSET_MODE" != "light" ]]; then
   python3 "$ROOT_DIR/scripts/download_study_assets.py"
 fi
 
@@ -163,7 +161,10 @@ if [[ "$ASSET_MODE" == "light" ]]; then
   rm -rf "$BUNDLED"
   mkdir -p "$BUNDLED/reviewed" "$BUNDLED/books/quran-audio" "$BUNDLED/licenses" "$BUNDLED/books/study/exams"
   cp "$ROOT_DIR/app/src/main/assets/reviewed/pupil6-ar.json" "$BUNDLED/reviewed/"
-  cp "$ROOT_DIR/app/build/generated/study-assets/reviewed/pupil6-ar.pdf" "$BUNDLED/reviewed/"
+  cp "$ROOT_DIR/app/src/main/assets/reviewed/pupil6-ar.pdf" "$BUNDLED/reviewed/"
+  for f in workbook6-ar.json workbook6-ar.pdf; do
+    [[ -f "$ROOT_DIR/app/src/main/assets/reviewed/$f" ]] && cp "$ROOT_DIR/app/src/main/assets/reviewed/$f" "$BUNDLED/reviewed/"
+  done
   cp "$BOOKS_DIR/quran-audio/"*.mp3 "$BUNDLED/books/quran-audio/"
   cp "$ROOT_DIR/app/src/main/assets/licenses/Noto-Naskh-OFL.txt" "$BUNDLED/licenses/"
   # The two advisory guides stay bundled by demand: a student must be able to
@@ -411,7 +412,10 @@ if [[ -d "$ROOT_DIR/app/build/generated/study-assets/books/study" ]]; then
   cp -r "$ROOT_DIR/app/build/generated/study-assets/books/study/." "$BUNDLED/books/study/"
 fi
 cp "$ROOT_DIR/app/src/main/assets/reviewed/pupil6-ar.json" "$BUNDLED/reviewed/"
-cp "$ROOT_DIR/app/build/generated/study-assets/reviewed/pupil6-ar.pdf" "$BUNDLED/reviewed/"
+cp "$ROOT_DIR/app/src/main/assets/reviewed/pupil6-ar.pdf" "$BUNDLED/reviewed/"
+for f in workbook6-ar.json workbook6-ar.pdf; do
+  [[ -f "$ROOT_DIR/app/src/main/assets/reviewed/$f" ]] && cp "$ROOT_DIR/app/src/main/assets/reviewed/$f" "$BUNDLED/reviewed/"
+done
 cp "$ROOT_DIR/app/src/main/assets/licenses/Noto-Naskh-OFL.txt" "$BUNDLED/licenses/"
 echo "Full bundled assets ready: $(find "$BUNDLED" -type f | wc -l | tr -d ' ') files."
 

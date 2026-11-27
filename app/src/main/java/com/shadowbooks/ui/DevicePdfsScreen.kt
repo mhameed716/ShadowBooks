@@ -1,10 +1,19 @@
 package com.shadowbooks.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -85,9 +94,40 @@ fun DevicePdfsScreen(
 ) {
     val context = LocalContext.current
     var entries by remember(context) { mutableStateOf(DevicePdfLibrary.load(context)) }
+    var discovered by remember(context) { mutableStateOf<List<DevicePdfEntry>>(emptyList()) }
+    var hiddenUris by remember(context) { mutableStateOf(DevicePdfLibrary.loadHidden(context)) }
     var showSettings by remember { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<DevicePdfEntry?>(null) }
-    LaunchedEffect(Unit) { Favorites.load(context) }
+    var storageGranted by remember(context) {
+        mutableStateOf(
+            Build.VERSION.SDK_INT >= 33 ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    var askedPermission by remember { mutableStateOf(false) }
+
+    suspend fun refreshDiscovered() {
+        discovered = withContext(Dispatchers.IO) { DevicePdfLibrary.discover(context) }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        storageGranted = granted || Build.VERSION.SDK_INT >= 33
+    }
+    LaunchedEffect(storageGranted) {
+        Favorites.load(context)
+        if (storageGranted) refreshDiscovered()
+    }
+    LaunchedEffect(Unit) {
+        if (!storageGranted && !askedPermission) {
+            askedPermission = true
+            permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { picked ->
         if (picked.isNotEmpty()) {
@@ -171,14 +211,37 @@ fun DevicePdfsScreen(
 
             Text(
                 stringResource(R.string.device_pdf_permission_note),
-                modifier = Modifier.padding(top = 9.dp, bottom = 12.dp),
+                modifier = Modifier.padding(top = 9.dp, bottom = 6.dp),
                 color = Color(0xFFB9C6D8),
                 fontFamily = DevicePdfFont,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
             )
 
-            if (entries.isEmpty()) {
+            if (!storageGranted) {
+                Button(
+                    onClick = { permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE) },
+                    modifier = Modifier.fillMaxWidth().height(46.dp).padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(15.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF123E59),
+                        contentColor = DevicePdfCyan,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.device_pdf_grant),
+                        fontFamily = DevicePdfFont,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            val safUris = entries.map { it.uri }.toSet()
+            val allEntries = entries + discovered.filterNot {
+                it.uri in hiddenUris || it.uri in safUris
+            }
+            if (allEntries.isEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
@@ -200,37 +263,30 @@ fun DevicePdfsScreen(
                 }
             } else {
                 Text(
-                    stringResource(R.string.device_pdf_count, entries.size),
+                    stringResource(R.string.device_pdf_count, allEntries.size),
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = DevicePdfCyan,
                     fontFamily = DevicePdfFont,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                val sortedEntries = remember(entries, Favorites.keys) {
-                    entries.sortedByDescending { Favorites.isFavorite("device:${it.uri}") }
+                val sortedEntries = remember(allEntries, Favorites.keys) {
+                    allEntries.sortedByDescending { Favorites.isFavorite("device:${it.uri}") }
                 }
-                LazyColumn(
+                // Four slim columns of real first-page covers, like a shelf.
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 14.dp),
                 ) {
-                    items(sortedEntries.chunked(2), key = { row -> row.first().uri }) { row ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(9.dp),
-                        ) {
-                            row.forEach { entry ->
-                                Box(Modifier.weight(1f)) {
-                                    DevicePdfCard(
-                                        entry = entry,
-                                        onOpen = { onOpen(entry.asVolume()) },
-                                        onRemove = { removeTarget = entry },
-                                    )
-                                }
-                            }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
-                        }
+                    gridItems(sortedEntries, key = DevicePdfEntry::uri) { entry ->
+                        DevicePdfCard(
+                            entry = entry,
+                            onOpen = { onOpen(entry.asVolume()) },
+                            onRemove = { removeTarget = entry },
+                        )
                     }
                 }
             }
@@ -253,14 +309,21 @@ fun DevicePdfsScreen(
             onDismiss = { removeTarget = null },
             onConfirmed = {
                 removeTarget = null
-                val updated = entries.filterNot { it.uri == entry.uri }
-                DevicePdfLibrary.save(context, updated)
-                entries = updated
-                runCatching {
-                    context.contentResolver.releasePersistableUriPermission(
-                        Uri.parse(entry.uri),
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                    )
+                if (entries.any { it.uri == entry.uri }) {
+                    val updated = entries.filterNot { it.uri == entry.uri }
+                    DevicePdfLibrary.save(context, updated)
+                    entries = updated
+                    runCatching {
+                        context.contentResolver.releasePersistableUriPermission(
+                            Uri.parse(entry.uri),
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        )
+                    }
+                } else {
+                    // A discovered file is only hidden here; it stays on the phone.
+                    val updatedHidden = hiddenUris + entry.uri
+                    DevicePdfLibrary.saveHidden(context, updatedHidden)
+                    hiddenUris = updatedHidden
                 }
             },
         )
@@ -282,12 +345,13 @@ private fun DevicePdfCard(entry: DevicePdfEntry, onOpen: () -> Unit, onRemove: (
     }
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = DevicePdfCardColor),
     ) {
         Column(Modifier.fillMaxWidth()) {
+            // The book's own first page as the cover, tall like a real book.
             Box(
-                Modifier.fillMaxWidth().aspectRatio(1.45f).background(Color(0xFF1B2C47)),
+                Modifier.fillMaxWidth().aspectRatio(0.72f).background(Color(0xFF1B2C47)),
                 contentAlignment = Alignment.Center,
             ) {
                 val bitmap = cover
@@ -303,48 +367,43 @@ private fun DevicePdfCard(entry: DevicePdfEntry, onOpen: () -> Unit, onRemove: (
                         Icons.Filled.MenuBook,
                         contentDescription = null,
                         tint = DevicePdfCyan,
-                        modifier = Modifier.size(30.dp),
+                        modifier = Modifier.size(24.dp),
                     )
                 }
                 IconButton(
                     onClick = { Favorites.toggle(context, favoriteKey) },
-                    modifier = Modifier.align(Alignment.TopEnd).size(34.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
                 ) {
                     Icon(
                         if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
                         contentDescription = if (favorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
                         tint = if (favorite) Color(0xFFFFC86B) else Color.White,
-                        modifier = Modifier.size(19.dp),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier.align(Alignment.BottomEnd).size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.DeleteOutline,
+                        contentDescription = stringResource(R.string.device_pdf_remove, entry.displayName),
+                        tint = Color(0xFFE7A0A0),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
-            Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 4.dp)) {
-                Text(
-                    entry.displayName,
-                    color = Color.White,
-                    fontFamily = DevicePdfFont,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.device_pdf_open_hint),
-                        color = Color(0xFF9EB2C9),
-                        fontFamily = DevicePdfFont,
-                        fontSize = 11.sp,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = onRemove) {
-                        Icon(
-                            Icons.Filled.DeleteOutline,
-                            contentDescription = stringResource(R.string.device_pdf_remove, entry.displayName),
-                            tint = Color(0xFFE7A0A0),
-                        )
-                    }
-                }
-            }
+            Text(
+                entry.displayName.removeSuffix(".pdf"),
+                color = Color.White,
+                fontFamily = DevicePdfFont,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.5.sp,
+                lineHeight = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 5.dp),
+            )
         }
     }
 }

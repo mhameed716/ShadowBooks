@@ -31,8 +31,17 @@ def verify(apk=None):
     reference = json.loads((ROOT/'editorial/english/pupil6/007-lost.json').read_text(encoding='utf-8'))
     reviewed_dir = ASSETS/'reviewed'
     reviewed_names = {p.name for p in reviewed_dir.iterdir() if p.is_file()}
-    if reviewed_names - {Path(PDF).name, Path(INDEX).name} or Path(INDEX).name not in reviewed_names:
+    pair = {'workbook6-ar.json', 'workbook6-ar.pdf'}
+    if reviewed_names - ({Path(PDF).name, Path(INDEX).name} | pair) or Path(INDEX).name not in reviewed_names:
         raise ValueError('Unexpected checked-in contents of reviewed/')
+    if reviewed_names & pair and reviewed_names & pair != pair:
+        raise ValueError('The workbook companion must arrive as a PDF/JSON pair')
+    if pair <= reviewed_names:
+        workbook_manifest = json.loads((ASSETS/'reviewed/workbook6-ar.json').read_text(encoding='utf-8'))
+        if workbook_manifest['version'] != 1 or sha256(
+            (ASSETS/'reviewed/workbook6-ar.pdf').read_bytes()
+        ).hexdigest() != workbook_manifest['arabicSha256'] or not workbook_manifest['pages']:
+            raise ValueError('Workbook companion does not match its index')
     prepared_pdf = ASSETS/PDF
     if not prepared_pdf.is_file():
         prepared_pdf = GENERATED_ASSETS/PDF
@@ -58,7 +67,13 @@ def verify(apk=None):
             names = archive.namelist()
             reject_retired_assets(names)
             reviewed = sorted(n for n in names if n.startswith('assets/reviewed/') and not n.endswith('/'))
-            if reviewed != sorted(['assets/'+PDF, 'assets/'+INDEX]):
+            expected = sorted(['assets/'+PDF, 'assets/'+INDEX])
+            if ('assets/reviewed/workbook6-ar.pdf' in names) != ('assets/reviewed/workbook6-ar.json' in names):
+                raise ValueError('Unexpected prepared assets in full APK')
+            if 'assets/reviewed/workbook6-ar.pdf' in names:
+                expected += ['assets/reviewed/workbook6-ar.pdf', 'assets/reviewed/workbook6-ar.json']
+                expected.sort()
+            if reviewed != expected:
                 raise ValueError('Unexpected prepared assets in full APK')
             # Only the prepared pair (and its font license) is bundled now; the
             # English source book itself is delivered by the in-app store, so it
