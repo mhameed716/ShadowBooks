@@ -47,6 +47,20 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def asset_name(dest: str) -> str:
+    """Release asset name for a destination.
+
+    GitHub rewrites uploaded asset names, replacing every run of characters
+    outside [A-Za-z0-9._-] with dots — which destroyed every Arabic file name
+    on the store release (the app asked for the Arabic name, the release held
+    a dotted one, and downloads died with HTTP 404). Asset names are therefore
+    pure ASCII derived from the destination itself: stable across runs (so
+    unchanged files are still skipped) and identical for publisher and app,
+    which reads the name from this catalog and never guesses.
+    """
+    return "f-" + hashlib.sha256(dest.encode("utf-8")).hexdigest() + ".pdf"
+
+
 def is_pdf(path: Path) -> bool:
     if not path.is_file() or path.stat().st_size <= 1024:
         return False
@@ -141,7 +155,13 @@ def main() -> int:
             int(old["rev"]) + 1 if old else 1
         )
         entries.append(
-            {"dest": dest, "size": size, "sha256": digest, "rev": rev}
+            {
+                "dest": dest,
+                "size": size,
+                "sha256": digest,
+                "rev": rev,
+                "asset": asset_name(dest),
+            }
         )
         seen.add(dest)
 
@@ -169,7 +189,13 @@ def main() -> int:
         elif old:
             rev = max(rev, int(old["rev"]) + 1)
         entries.append(
-            {"dest": dest, "size": size, "sha256": digest, "rev": rev}
+            {
+                "dest": dest,
+                "size": size,
+                "sha256": digest,
+                "rev": rev,
+                "asset": asset_name(dest),
+            }
         )
         seen.add(dest)
 
