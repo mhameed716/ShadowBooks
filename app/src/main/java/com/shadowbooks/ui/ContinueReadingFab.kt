@@ -59,7 +59,7 @@ private val FabCyan = Color(0xFF65D4FA)
 fun ContinueReadingLayer(onContinue: () -> Unit) {
     val context = LocalContext.current
     LastReadStore.peek(context)
-    val lastRead = LastReadStore.lastRead ?: return@BoxWithConstraints
+    val lastRead = LastReadStore.lastRead
     val density = LocalDensity.current
     var fabWidthPx by remember { mutableStateOf(0) }
     var fabHeightPx by remember { mutableStateOf(0) }
