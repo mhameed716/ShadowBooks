@@ -22,7 +22,7 @@ object LastReadStore {
     private const val PREFS = "reading_last"
     private const val KEY = "last"
 
-    /** Observable mirror so the floating «متابعة القراءة» pill redraws live. */
+    /** Observable mirror so the floating «متابعة القراءة» button redraws live. */
     var lastRead by mutableStateOf<LastRead?>(null)
         private set
 
@@ -71,6 +71,7 @@ object LastReadStore {
                 .put("page", record.page)
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()
+                .putInt(progressKey(record.fileName, record.contentUri), record.page.coerceAtLeast(0))
                 .putString(KEY, json.toString())
                 .apply()
             lastRead = record
@@ -79,8 +80,19 @@ object LastReadStore {
         }
     }
 
-    fun updatePage(context: Context, page: Int) {
-        val current = lastRead ?: load(context) ?: return
-        if (current.page != page) save(context, current.copy(page = page))
+    /** Each document keeps its own position, even after reading another book. */
+    fun pageFor(context: Context, volume: BookVolume): Int {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val uri = volume.contentUri.orEmpty()
+        val key = progressKey(volume.fileName, uri)
+        if (prefs.contains(key)) return prefs.getInt(key, 0).coerceAtLeast(0)
+        // Migrate the previous single-book record without losing its page.
+        return load(context)?.takeIf {
+            it.fileName == volume.fileName && it.contentUri == uri
+        }?.page?.coerceAtLeast(0) ?: 0
     }
 }
+
+/** Length prefix prevents collisions between file names and content URIs. */
+internal fun progressKey(fileName: String, contentUri: String): String =
+    "page:${fileName.length}:$fileName$contentUri"

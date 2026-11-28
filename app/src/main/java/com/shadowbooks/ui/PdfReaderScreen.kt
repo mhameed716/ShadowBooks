@@ -20,6 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -67,6 +70,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -112,7 +117,10 @@ fun PdfReaderScreen(
                 val ready = document
                 if (ready != null) {
                     session.SaveableStateProvider(volume.fileName) {
-                        OpenBook(ready, volume, night, onNight = { night = !night }, onBack = onBack)
+                        OpenBook(
+                            ready, volume, night, onNight = { night = !night }, onBack = onBack,
+                            initialPage = initialPage, onPageChanged = onPageChanged,
+                        )
                     }
                 } else {
                     Column(
@@ -141,23 +149,24 @@ private fun OpenBook(
     initialPage: Int = 0,
     onPageChanged: (Int) -> Unit = {},
 ) {
-    val list = rememberLazyListState()
     val count = document.pageCount
+    // Initialize at the saved page before observing progress; never write a transient page 1.
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = initialPage.coerceIn(0, count - 1))
     val aspect = document.firstAspect
     val saver = remember(list, count, aspect) { ReaderViewport.saver(list, count, aspect) }
     // A fresh renderer on foregrounding the same volume is not a new reading session.
     val view = rememberSaveable(volume.fileName, count, list, saver = saver) { ReaderViewport(list, count, aspect) }
-    // «متابعة القراءة»: land on the remembered page once per opened document.
-    LaunchedEffect(document) {
-        if (initialPage in 1 until count) {
-            try {
-                view.jump(initialPage)
-            } catch (e: Exception) {
-                // A failed jump only means reading starts at the first page.
-            }
+    val savePage by rememberUpdatedState(onPageChanged)
+    LaunchedEffect(view) {
+        snapshotFlow {
+            view.currentIndex.takeIf { list.layoutInfo.visibleItemsInfo.isNotEmpty() }
+        }.filterNotNull().distinctUntilChanged().collect { savePage(it) }
+    }
+    DisposableEffect(view) {
+        onDispose {
+            if (list.layoutInfo.visibleItemsInfo.isNotEmpty()) savePage(view.currentIndex)
         }
     }
-    LaunchedEffect(view.currentIndex) { onPageChanged(view.currentIndex) }
     var arabicPages by rememberSaveable { mutableStateOf(intArrayOf()) }
     val pageIndex = view.currentIndex
     val hasArabic = document.arabicText(pageIndex) != null
