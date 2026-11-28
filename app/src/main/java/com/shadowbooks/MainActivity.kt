@@ -1,20 +1,28 @@
 package com.shadowbooks
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.shadowbooks.store.PackImportRequest
 import com.shadowbooks.ui.ShadowBooksApp
 import com.shadowbooks.ui.theme.ShadowBooksTheme
 
 class MainActivity : ComponentActivity() {
+    private val firstRunPermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = android.graphics.Color.rgb(10, 16, 32)
         window.navigationBarColor = android.graphics.Color.rgb(10, 16, 32)
+        askFirstRunPermissions()
         handlePackIntent(intent)
         setContent {
             ShadowBooksTheme {
