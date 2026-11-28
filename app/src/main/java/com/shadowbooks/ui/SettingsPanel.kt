@@ -1,6 +1,16 @@
 package com.shadowbooks.ui
 
+import android.Manifest
 import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -43,7 +53,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.shadowbooks.BuildConfig
 import com.shadowbooks.R
 import com.shadowbooks.reminder.StudyReminder
 import com.shadowbooks.store.TrashBin
@@ -84,7 +93,7 @@ fun SpinningGearButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             Icons.Filled.Settings,
             contentDescription = "الإعدادات",
             tint = SettingsCyan,
-            modifier = Modifier.size(26.dp).rotate(angle),
+                modifier = Modifier.size(22.dp).rotate(angle),
         )
     }
 }
@@ -101,100 +110,103 @@ fun SettingsSheet(onDismiss: () -> Unit) {
     val trashCount = remember(trashVersion) { TrashBin.count(context) }
     val trashBytes = remember(trashVersion) { TrashBin.totalBytes(context) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SettingsCard,
-        title = {
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth(0.86f)
+                .clip(RoundedCornerShape(18.dp))
+                .background(SettingsCard)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
             Text(
                 "الإعدادات",
                 color = Color.White,
                 fontFamily = SettingsFont,
                 fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
             )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SettingsRow(
-                    title = "سلة المحذوفات",
-                    detail = when {
-                        trashCount == 0 -> "فارغة"
-                        else -> "$trashCount ملف · ${formatSettingsSize(trashBytes)}" +
-                            " · تُفرَّغ تلقائيًا كل شهر"
-                    },
-                ) {
-                    showTrash = true
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "تذكير المذاكرة اليومي",
-                            color = Color.White,
-                            fontFamily = SettingsFont,
-                            fontSize = 15.sp,
-                        )
-                        Text(
-                            if (reminderOn) {
-                                "الساعة " + String.format(
-                                    Locale.US,
-                                    "%02d:%02d",
-                                    reminderHour,
-                                    reminderMinute,
-                                )
-                            } else {
-                                "متوقف"
-                            },
-                            color = SettingsMuted,
-                            fontFamily = SettingsFont,
-                            fontSize = 12.sp,
-                        )
-                    }
-                    if (reminderOn) {
-                        TextButton(onClick = {
-                            TimePickerDialog(
-                                context,
-                                { _, h, m ->
-                                    reminderHour = h
-                                    reminderMinute = m
-                                    StudyReminder.setTime(context, h, m)
-                                },
-                                reminderHour,
-                                reminderMinute,
-                                false,
-                            ).show()
-                        }) {
-                            Text("الوقت", color = SettingsCyan, fontFamily = SettingsFont)
-                        }
-                    }
-                    Switch(
-                        checked = reminderOn,
-                        onCheckedChange = { enabled ->
-                            reminderOn = enabled
-                            StudyReminder.setEnabled(context, enabled)
+            Spacer(Modifier.height(6.dp))
+            SettingsRow(
+                title = "سلة المحذوفات",
+                detail = when {
+                    trashCount == 0 -> "فارغة"
+                    else -> "$trashCount ملف · ${formatSettingsSize(trashBytes)}"
+                },
+            ) {
+                showTrash = true
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "تذكير المذاكرة اليومي",
+                        color = Color.White,
+                        fontFamily = SettingsFont,
+                        fontSize = 14.sp,
+                    )
+                    Text(
+                        if (reminderOn) {
+                            "الساعة " + StudyReminder.formatTime(reminderHour, reminderMinute)
+                        } else {
+                            "متوقف"
                         },
+                        color = SettingsMuted,
+                        fontFamily = SettingsFont,
+                        fontSize = 11.sp,
                     )
                 }
-                SettingsRow(
-                    title = "إعادة قفل بوابة القناة الآن",
-                    detail = "سيُطلب إدخال الكود عند الدخول القادم (ويعود مع كل تحديث للتطبيق)",
-                ) {
-                    lockChannelGate(context)
-                    onDismiss()
+                if (reminderOn) {
+                    TextButton(onClick = {
+                        TimePickerDialog(
+                            context,
+                            { _, h, m ->
+                                reminderHour = h
+                                reminderMinute = m
+                                StudyReminder.setTime(context, h, m)
+                            },
+                            reminderHour,
+                            reminderMinute,
+                            false, // 12-hour clock (ص/م)
+                        ).show()
+                    }) {
+                        Text("الوقت", color = SettingsCyan, fontFamily = SettingsFont, fontSize = 13.sp)
+                    }
                 }
-                SettingsRow(
-                    title = "حول التطبيق",
-                    detail = "ShadowBooks إصدار ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                ) {}
+                Switch(
+                    checked = reminderOn,
+                    onCheckedChange = { enabled ->
+                        reminderOn = enabled
+                        StudyReminder.setEnabled(context, enabled)
+                        if (enabled &&
+                            Build.VERSION.SDK_INT >= 33 &&
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                )
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("إغلاق", color = SettingsCyan, fontFamily = SettingsFont)
+            SettingsRow(
+                title = "إعادة قفل بوابة القناة الآن",
+                detail = "سيُطلب إدخال الكود عند الدخول القادم",
+            ) {
+                lockChannelGate(context)
+                onDismiss()
             }
-        },
-    )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) {
+                    Text("إغلاق", color = SettingsCyan, fontFamily = SettingsFont, fontSize = 13.sp)
+                }
+            }
+        }
+    }
 
     if (showTrash) {
         TrashDialog(onDismiss = { showTrash = false })

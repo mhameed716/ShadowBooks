@@ -1,7 +1,10 @@
 package com.shadowbooks.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
@@ -144,8 +147,23 @@ fun ShadowBooksApp(onExit: () -> Unit) {
             AppDestination.Welcome -> onExit()
         }
     }
+    val continueReading: () -> Unit = {
+        LastReadStore.load(context)?.let { last ->
+            readerFromResources = last.origin == "resources"
+            readerFromStore = false
+            readerFromDevicePdfs = last.origin == "device"
+            readerContentUri = last.contentUri
+            volumeFile = last.fileName
+            readerTitle = last.title
+            readerDescription = last.description
+            if (last.origin == "library") bookNumber = last.bookNumber
+            destination = AppDestination.Reader
+        }
+        Unit
+    }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         BackHandler(onBack = back)
+        Box(Modifier.fillMaxSize()) {
         when (screen) {
             AppDestination.Welcome -> WelcomeScreen { destination = AppDestination.Library }
             AppDestination.Library -> LibraryScreen(
@@ -187,20 +205,6 @@ fun ShadowBooksApp(onExit: () -> Unit) {
                             candidate.fileName == volume.fileName ||
                                 candidate.volumes.any { it.fileName == volume.fileName }
                         }?.let { bookNumber = it.number }
-                    }
-                    destination = AppDestination.Reader
-                },
-                onContinueReading = { volume, fromResources ->
-                    val last = LastReadStore.load(context)
-                    readerFromResources = fromResources
-                    readerFromStore = false
-                    readerFromDevicePdfs = last?.origin == "device"
-                    readerContentUri = last?.contentUri.orEmpty()
-                    volumeFile = volume.fileName
-                    readerTitle = volume.title
-                    readerDescription = volume.description
-                    if (last != null && last.origin == "library") {
-                        bookNumber = last.bookNumber
                     }
                     destination = AppDestination.Reader
                 },
@@ -301,11 +305,17 @@ fun ShadowBooksApp(onExit: () -> Unit) {
             )
             AppDestination.Reader -> PdfReaderScreen(
                 volume = checkNotNull(readerVolume),
-                initialPage = LastReadStore.load(context)
+                initialPage = LastReadStore.peek(context)
                     ?.takeIf { it.fileName == volumeFile }?.page ?: 0,
                 onPageChanged = { page -> LastReadStore.updatePage(context, page) },
                 onBack = back,
             )
+        }
+        // The floating «متابعة القراءة» pill rides on every screen except
+        // ملفات الهاتف and the reader itself (where the page already moves it).
+        if (screen != AppDestination.DevicePdfs && screen != AppDestination.Reader) {
+            ContinueReadingLayer(continueReading)
+        }
         }
     }
 }

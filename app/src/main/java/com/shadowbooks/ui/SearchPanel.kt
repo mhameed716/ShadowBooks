@@ -178,7 +178,7 @@ fun GlobalSearchDialog(
 }
 
 @Composable
-private fun SearchHitCard(
+internal fun SearchHitCard(
     hit: GlobalSearchHit,
     onOpen: (BookVolume, Boolean) -> Unit,
     onOpenStore: () -> Unit,
