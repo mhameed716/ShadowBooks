@@ -14,6 +14,12 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- Lets the downloader see the installed ShadowBooks app so it can tell
+         an up-to-date install from an old one (and never downloads twice). -->
+    <queries>
+        <package android:name="com.shadowbooks" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@android:drawable/stat_sys_download"

@@ -103,6 +103,8 @@ fun SpinningGearButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
 fun SettingsSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     var showTrash by remember { mutableStateOf(false) }
+    var showDownloaded by remember { mutableStateOf(false) }
+    var showTransfer by remember { mutableStateOf(false) }
     var reminderOn by remember { mutableStateOf(StudyReminder.isEnabled(context)) }
     var reminderHour by remember { mutableStateOf(StudyReminder.hour(context)) }
     var reminderMinute by remember { mutableStateOf(StudyReminder.minute(context)) }
@@ -136,6 +138,18 @@ fun SettingsSheet(onDismiss: () -> Unit) {
                 },
             ) {
                 showTrash = true
+            }
+            SettingsRow(
+                title = "الملفات المحمّلة",
+                detail = "كتبك وملفاتك المنزّلة على هذا الهاتف: افتحها أو احذفها من هنا",
+            ) {
+                showDownloaded = true
+            }
+            SettingsRow(
+                title = "إرسال واستيراد الملفات",
+                detail = "أرسل ملفاتك المنزّلة إلى صديق، أو استورد ملفاته إلى مكتبتك",
+            ) {
+                showTransfer = true
             }
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -194,6 +208,12 @@ fun SettingsSheet(onDismiss: () -> Unit) {
                 )
             }
             SettingsRow(
+                title = "التنزيل من غير قيود",
+                detail = "ينقلك مباشرة لتفعيله حتى تنزّل الملفات بدون أي مشاكل",
+            ) {
+                openUnrestrictedDownload(context)
+            }
+            SettingsRow(
                 title = "إعادة قفل بوابة القناة الآن",
                 detail = "سيُطلب إدخال الكود عند الدخول القادم",
             ) {
@@ -210,6 +230,18 @@ fun SettingsSheet(onDismiss: () -> Unit) {
 
     if (showTrash) {
         TrashDialog(onDismiss = { showTrash = false })
+    }
+    if (showDownloaded) {
+        DownloadedFilesSheet(
+            onDismiss = { showDownloaded = false },
+            onOpenFile = {
+                showDownloaded = false
+                onDismiss()
+            },
+        )
+    }
+    if (showTransfer) {
+        FileTransferSheet(onDismiss = { showTransfer = false })
     }
 }
 

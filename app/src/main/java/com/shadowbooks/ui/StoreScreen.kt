@@ -129,7 +129,6 @@ fun StoreScreen(
     var catalog by remember { mutableStateOf(StoreContent.cachedCatalog(context)) }
     var refreshing by remember { mutableStateOf(false) }
     var refreshFailed by remember { mutableStateOf(false) }
-    var downloadedMode by remember { mutableStateOf(false) }
     var refreshTick by remember { mutableIntStateOf(0) }
     var showSettings by remember { mutableStateOf(false) }
     var trashTarget by remember { mutableStateOf<StoreEntry?>(null) }
@@ -143,36 +142,6 @@ fun StoreScreen(
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         StoreDownloader.enqueue(context, entry)
-    }
-
-    var showUnrestrictedDialog by remember { mutableStateOf(false) }
-    fun openBatteryExemption() {
-        try {
-            context.startActivity(
-                Intent(
-                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    Uri.parse("package:" + context.packageName),
-                ),
-            )
-        } catch (e: Exception) {
-            try {
-                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            } catch (e2: Exception) {
-                // Some OEMs hide both; the app-settings button below still works.
-            }
-        }
-    }
-    fun openAppSettings() {
-        try {
-            context.startActivity(
-                Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + context.packageName),
-                ),
-            )
-        } catch (e: Exception) {
-            // Nothing sensible to fall back to.
-        }
     }
 
     LaunchedEffect(refreshTick) {
@@ -257,7 +226,6 @@ fun StoreScreen(
     LaunchedEffect(pendingPackUri) {
         if (pendingPackUri != null) {
             PackImportRequest.pendingUri = null
-            downloadedMode = true
             startImport(Uri.parse(pendingPackUri))
         }
     }
@@ -311,19 +279,10 @@ fun StoreScreen(
             StoreCategory(6, "اللغة العربية", StudyMaterialCatalog.arabicGroupFiles(bySubject)),
         ) else emptyList()
         val singles = listOf(9, 11, 12, 10, 13).mapNotNull { single(it) }
+        // The two ministry guides are NOT sold here: they ship inside the
+        // app itself and live in «الملخصات والاختبارات» from the first run.
         return if (kind == StudyMaterialKind.Exam) {
-            listOf(
-                StoreCategory(
-                    StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER,
-                    "كيف تستفيد من النماذج الوزارية؟",
-                    bySubject[StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER].orEmpty(),
-                ),
-                StoreCategory(
-                    StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER,
-                    "الفرق بين النموذج وبنك الأسئلة",
-                    bySubject[StudyMaterialCatalog.MODEL_VS_QUESTION_BANK_NUMBER].orEmpty(),
-                ),
-            ) + grouped + singles
+            grouped + singles
         } else {
             grouped + singles
         }
@@ -365,81 +324,6 @@ fun StoreScreen(
                 }
             }
 
-            // Available / Downloaded toggle.
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                StoreChip("المتوفرة", !downloadedMode, Modifier.weight(1f)) { downloadedMode = false }
-                StoreChip("المحمّلة", downloadedMode, Modifier.weight(1f)) { downloadedMode = true }
-            }
-
-            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
-                StoreChip(
-                    "تفعيل التنزيل دون قيود (بطارية + بيانات)",
-                    false,
-                    Modifier.weight(1f),
-                ) { showUnrestrictedDialog = true }
-            }
-
-            if (showUnrestrictedDialog) {
-                val powerManager =
-                    context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-                val batteryFree = powerManager
-                    ?.isIgnoringBatteryOptimizations(context.packageName) == true
-                AlertDialog(
-                    onDismissRequest = { showUnrestrictedDialog = false },
-                    containerColor = StoreCard,
-                    title = {
-                        Text(
-                            "التنزيل دون قيود",
-                            color = Color.White,
-                            fontFamily = StoreFont,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    },
-                    text = {
-                        Text(
-                            "حتى لا يقتل الهاتف التنزيلات الطويلة على الشبكات الضعيفة: " +
-                                "اسمح للتطبيق بتجاوز تحسين البطارية، ومن إعدادات التطبيق فعّل " +
-                                "«بيانات الخلفية» و«استخدام بيانات غير مقيد». التطبيق عنده إذن " +
-                                "الإنترنت الكامل أصلًا؛ هذه قيود يفرضها نظام الهاتف لا التطبيق.",
-                            color = StoreMuted,
-                            fontFamily = StoreFont,
-                            fontSize = 14.sp,
-                        )
-                    },
-                    confirmButton = {
-                        Column {
-                            if (!batteryFree) {
-                                TextButton(onClick = {
-                                    showUnrestrictedDialog = false
-                                    openBatteryExemption()
-                                }) {
-                                    Text(
-                                        "إعفاء البطارية",
-                                        color = StoreCyan,
-                                        fontFamily = StoreFont,
-                                    )
-                                }
-                            }
-                            TextButton(onClick = {
-                                showUnrestrictedDialog = false
-                                openAppSettings()
-                            }) {
-                                Text(
-                                    "إعدادات التطبيق والبيانات",
-                                    color = StoreCyan,
-                                    fontFamily = StoreFont,
-                                )
-                            }
-                            TextButton(onClick = { showUnrestrictedDialog = false }) {
-                                Text("إغلاق", color = StoreMuted, fontFamily = StoreFont)
-                            }
-                        }
-                    },
-                )
-            }
             // Section toggle.
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -453,20 +337,6 @@ fun StoreScreen(
                 }
                 StoreChip("الاختبارات", section == STORE_SECTION_EXAM, Modifier.weight(1f)) {
                     onSectionChange(STORE_SECTION_EXAM)
-                }
-            }
-
-            if (downloadedMode) {
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    StoreChip("إرسال ملفاتي", false, Modifier.weight(1f)) {
-                        if (!packBusy) startExport()
-                    }
-                    StoreChip("استيراد ملفات", false, Modifier.weight(1f)) {
-                        if (!packBusy) importPicker.launch(arrayOf("*/*"))
-                    }
                 }
             }
 
@@ -565,15 +435,12 @@ fun StoreScreen(
                             val rows = volumes.mapNotNull { volume ->
                                 entriesByDest["books/${volume.fileName}"]?.let { volume to it }
                             }
-                            val visible = (if (downloadedMode) {
-                                rows.filter { StoreContent.isInstalled(context, it.second) }
-                            } else {
-                                // Once a book is on the device it leaves the
-                                // shop window; it lives in «المحمّلة» now.
-                                rows.filterNot {
-                                    StoreContent.localFile(context, it.second.dest).isFile
-                                }
-                            }).sortedByDescending {
+                            // Once a book is on the device it leaves the
+                            // shop window; its home is «الملفات المحمّلة»
+                            // inside the settings now.
+                            val visible = rows.filterNot {
+                                StoreContent.localFile(context, it.second.dest).isFile
+                            }.sortedByDescending {
                                 Favorites.isFavorite(it.second.dest)
                             }
                             if (visible.isNotEmpty()) {
@@ -589,7 +456,7 @@ fun StoreScreen(
                                                     StoreEntryRow(
                                                         entry = entry,
                                                         title = volume.title,
-                                                        downloadedMode = downloadedMode,
+                                                        downloadedMode = false,
                                                         onOpen = { onOpenBook(volume) },
                                                         onDownload = { enqueue(entry) },
                                                         onDelete = { trashTarget = entry },
@@ -641,15 +508,9 @@ fun StoreScreen(
                             }
                         }
                         items(sections, key = { it.key }) { studySection ->
-                            val visible = (if (downloadedMode) {
-                                studySection.rows.filter {
-                                    StoreContent.isInstalled(context, it.second)
-                                }
-                            } else {
-                                studySection.rows.filterNot {
-                                    StoreContent.localFile(context, it.second.dest).isFile
-                                }
-                            }).sortedByDescending {
+                            val visible = studySection.rows.filterNot {
+                                StoreContent.localFile(context, it.second.dest).isFile
+                            }.sortedByDescending {
                                 Favorites.isFavorite(it.second.dest)
                             }
                             if (visible.isNotEmpty()) {
@@ -665,7 +526,7 @@ fun StoreScreen(
                                                     StoreEntryRow(
                                                         entry = entry,
                                                         title = material.title,
-                                                        downloadedMode = downloadedMode,
+                                                        downloadedMode = false,
                                                         onOpen = {
                                                             onOpenStudy(
                                                                 BookVolume(
@@ -782,7 +643,7 @@ private fun StoreEntryRow(
     ) {
         Column(Modifier.fillMaxWidth()) {
             Box(Modifier.fillMaxWidth()) {
-                StoreCover(entry, Modifier.fillMaxWidth().aspectRatio(0.78f))
+                StoreCover(entry, Modifier.fillMaxWidth().aspectRatio(1.35f))
                 if (entry.isNew()) {
                     Text(
                         "New",

@@ -22,6 +22,15 @@ import android.widget.TextView;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Thin UI over DownloadService: the transfer itself lives in the foreground
@@ -32,6 +41,13 @@ import java.io.File;
 public final class MainActivity extends Activity {
     private static final int REQUEST_NOTIFICATIONS = 7;
     private static final int REQUEST_STORAGE = 8;
+    private static final String MAIN_PACKAGE = "com.shadowbooks";
+    private static final String RELEASE_API_URL =
+            "https://api.github.com/repos/mhameed716/ShadowBooks/releases/tags/v1.0";
+    /** latest = installed bytes ARE the published release; update = a newer
+     *  release exists; none = ShadowBooks is not installed; unknown = the
+     *  check has not finished (or the network was down). */
+    private volatile String versionVerdict = "unknown";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable poll = new Runnable() {
@@ -126,7 +142,101 @@ public final class MainActivity extends Activity {
                 && !heartbeatFresh) {
             DownloadService.start(this);
         }
+        checkVersionsAsync();
         render();
+    }
+
+    /**
+     * Version sense, checked off the UI thread: if ShadowBooks is installed,
+     * hash its APK on the phone and compare it with the fingerprint (SHA-256)
+     * GitHub publishes for the release asset. Identical bytes = the very
+     * latest version: no download, no reinstall. Different bytes = an old
+     * copy: the downloader fetches the new release (the service already
+     * refuses to mix bytes from two builds, so the new download cannot fail
+     * by resuming an old partial).
+     */
+    private void checkVersionsAsync() {
+        new Thread(() -> {
+            String verdict = "unknown";
+            try {
+                android.content.pm.PackageInfo installed = installedMainApp();
+                if (installed == null) {
+                    verdict = "none";
+                } else {
+                    String digest = fetchReleaseDigest();
+                    if (digest != null) {
+                        String installedDigest = sha256Of(
+                                new File(installed.applicationInfo.sourceDir));
+                        verdict = digest.equalsIgnoreCase(installedDigest)
+                                ? "latest" : "update";
+                    }
+                }
+            } catch (Exception ignored) {
+                // Network down or package vanished: keep the neutral UI.
+            }
+            versionVerdict = verdict;
+            handler.post(this::render);
+        }, "sb-version-check").start();
+    }
+
+    private android.content.pm.PackageInfo installedMainApp() {
+        try {
+            return getPackageManager().getPackageInfo(MAIN_PACKAGE, 0);
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
+    private String fetchReleaseDigest() {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(RELEASE_API_URL).openConnection();
+            connection.setConnectTimeout(20_000);
+            connection.setReadTimeout(20_000);
+            connection.setRequestProperty("User-Agent", "ShadowBooks-Downloader/2.0");
+            connection.setRequestProperty("Accept", "application/vnd.github+json");
+            if (connection.getResponseCode() / 100 != 2) return null;
+            String json;
+            try (InputStream input = connection.getInputStream()) {
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[8192];
+                int read;
+                while ((read = input.read(chunk)) != -1) buffer.write(chunk, 0, read);
+                json = buffer.toString(StandardCharsets.UTF_8.name());
+            }
+            int asset = json.indexOf("\"ShadowBooks.apk\"");
+            String scope = asset >= 0
+                    ? json.substring(asset, Math.min(json.length(), asset + 4096)) : json;
+            Matcher matcher = Pattern
+                    .compile("\"digest\"\\s*:\\s*\"sha256:([0-9a-fA-F]{64})\"")
+                    .matcher(scope);
+            return matcher.find() ? matcher.group(1) : null;
+        } catch (Exception error) {
+            return null;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private static String sha256Of(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream input = new FileInputStream(file)) {
+            byte[] chunk = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(chunk)) != -1) digest.update(chunk, 0, read);
+        }
+        StringBuilder out = new StringBuilder();
+        for (byte b : digest.digest()) out.append(String.format("%02x", b));
+        return out.toString();
+    }
+
+    private void openMainApp() {
+        Intent launch = getPackageManager().getLaunchIntentForPackage(MAIN_PACKAGE);
+        if (launch != null) {
+            startActivity(launch);
+        } else {
+            statusView.setText("ShadowBooks مثبّت لديك بأحدث إصدار. افتحه من شاشة هاتفك الرئيسية.");
+        }
     }
 
     @Override
@@ -143,7 +253,9 @@ public final class MainActivity extends Activity {
     }
 
     private void onActionClicked() {
-        if (completeApkExists()) {
+        if ("latest".equals(versionVerdict)) {
+            openMainApp();
+        } else if (completeApkExists()) {
             installDownloadedApk();
         } else if (!isServiceActive()) {
             startDownload();
@@ -217,6 +329,30 @@ public final class MainActivity extends Activity {
         boolean complete = completeApkExists();
         File part = DownloadService.partFile(this);
         boolean hasPartial = part.isFile() && part.length() > 0;
+
+        if ("latest".equals(versionVerdict) && !active) {
+            progressBar.setProgress(1000);
+            statusView.setText("ShadowBooks مثبّت على هاتفك بأحدث إصدار متاح — "
+                    + "لا حاجة لتنزيله من جديد.");
+            actionButton.setText("فتح ShadowBooks");
+            actionButton.setEnabled(true);
+            pauseButton.setVisibility(View.GONE);
+            deleteButton.setVisibility(View.GONE);
+            return;
+        }
+
+        if ("update".equals(versionVerdict) && !active && !complete) {
+            statusView.setText("لديك نسخة أقدم من ShadowBooks، ويتوفر إصدار جديد. "
+                    + "اضغط الزر لتنزيل النسخة الجديدة المطلوبة بالضبط "
+                    + "(لن تختلط ببقايا النسخة القديمة).");
+            actionButton.setText("تنزيل الإصدار الجديد");
+            actionButton.setEnabled(true);
+            pauseButton.setVisibility(View.GONE);
+            deleteButton.setVisibility(hasPartial ? View.VISIBLE : View.GONE);
+            progressBar.setProgress(hasPartial && total > 0
+                    ? (int) Math.min(1000L, downloaded * 1000L / total) : 0);
+            return;
+        }
 
         if (complete) {
             progressBar.setProgress(1000);
