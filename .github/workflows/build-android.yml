@@ -2,7 +2,7 @@ name: Build ShadowBooks Android APK
 
 on:
   push:
-    branches: [main, arena/4d1ad1ea-shadowbooks]
+    branches: [main, arena/4d1ad1ea-shadowbooks, arena/399eac9a-shadowbooks]
   workflow_dispatch:
     inputs:
       edition:
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Main builds full by default; this session branch opts into full only with [full-apk].
-      FULL_BOOKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/4d1ad1ea-shadowbooks' && contains(github.event.head_commit.message, '[full-apk]')) || (github.event_name == 'workflow_dispatch' && inputs.edition == 'full') }}
+      FULL_BOOKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && (github.ref == 'refs/heads/arena/4d1ad1ea-shadowbooks' || github.ref == 'refs/heads/arena/399eac9a-shadowbooks') && contains(github.event.head_commit.message, '[full-apk]')) || (github.event_name == 'workflow_dispatch' && inputs.edition == 'full') }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4

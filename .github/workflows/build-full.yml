@@ -8,7 +8,7 @@ name: Build ShadowBooks Full Edition
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, arena/399eac9a-shadowbooks]
 
 permissions:
   contents: write
