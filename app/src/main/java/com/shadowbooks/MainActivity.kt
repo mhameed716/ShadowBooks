@@ -23,6 +23,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * First install/run: explicitly ask for file access (so «ملفات الهاتف»
+     * can list the phone's PDFs) and, on Android 13+, notification access
+     * (so the study alarm can ring). Asked once; never nagged again.
+     */
+    private fun askFirstRunPermissions() {
+        val prefs = getSharedPreferences("first_run_permissions", MODE_PRIVATE)
+        if (prefs.getBoolean("asked", false)) return
+        prefs.edit().putBoolean("asked", true).apply()
+        val wanted = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT <= 32 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            wanted += Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            wanted += Manifest.permission.POST_NOTIFICATIONS
+        }
+        if (wanted.isNotEmpty()) firstRunPermissions.launch(wanted.toTypedArray())
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

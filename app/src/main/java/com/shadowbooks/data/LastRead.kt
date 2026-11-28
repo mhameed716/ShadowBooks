@@ -19,6 +19,21 @@ object LastReadStore {
     private const val PREFS = "reading_last"
     private const val KEY = "last"
 
+    /** Observable mirror so the floating «متابعة القراءة» pill redraws live. */
+    var lastRead by mutableStateOf<LastRead?>(null)
+        private set
+
+    private var loaded = false
+
+    /** Warms the observable mirror once; afterwards it tracks save/update. */
+    fun peek(context: Context): LastRead? {
+        if (!loaded) {
+            loaded = true
+            lastRead = load(context)
+        }
+        return lastRead
+    }
+
     fun load(context: Context): LastRead? {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY, null)

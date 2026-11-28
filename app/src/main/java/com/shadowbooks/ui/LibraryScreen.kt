@@ -61,8 +61,15 @@ import com.shadowbooks.data.Book
 import com.shadowbooks.data.BookCatalog
 import com.shadowbooks.data.BookVolume
 import com.shadowbooks.data.LastReadStore
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import com.shadowbooks.data.Favorites
 import com.shadowbooks.store.StoreContent
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,15 +101,31 @@ fun LibraryScreen(
     onOpenTimetable: () -> Unit,
     onOpenDevicePdfs: () -> Unit,
     onOpenStore: () -> Unit,
-    onContinueReading: (BookVolume, Boolean) -> Unit = { _, _ -> },
     onSearchOpen: (BookVolume, Boolean) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     // Refresh shelf badges when store downloads land.
     val installedVersion = StoreContent.installedVersion
     var showSettings by remember { mutableStateOf(false) }
-    var showSearch by remember { mutableStateOf(false) }
-    val lastRead = remember(context, installedVersion) { LastReadStore.load(context) }
+    // Direct in-library search: typing swaps the shelves for the results.
+    var query by rememberSaveable { mutableStateOf("") }
+    var searchIndex by remember { mutableStateOf<GlobalSearchIndex?>(null) }
+    LaunchedEffect(Unit) {
+        Favorites.load(context)
+        searchIndex = buildGlobalSearchIndex(context)
+    }
+    val searching = query.isNotBlank()
+    val results = remember(searchIndex, query, Favorites.keys) {
+        if (!searching) {
+            emptyList()
+        } else {
+            searchIndex?.query(query).orEmpty().sortedWith(
+                compareByDescending<GlobalSearchHit> { Favorites.isFavorite(it.dest) }
+                    .thenBy { it.section }
+                    .thenBy { it.title },
+            )
+        }
+    }
     val undownloaded = remember(context, installedVersion) {
         BookCatalog.books
             .filterNot { StoreContent.isBookDownloaded(context, it) }
@@ -140,27 +163,36 @@ fun LibraryScreen(
                         }
                     }
                     item(key = "library-actions") {
-                        LibraryActionsBar(
-                            lastReadTitle = lastRead?.title,
-                            lastReadPage = lastRead?.page,
-                            onSearch = { showSearch = true },
-                            onContinue = {
-                                lastRead?.let { last ->
-                                    onContinueReading(
-                                        BookVolume(
-                                            title = last.title,
-                                            fileName = last.fileName,
-                                            description = last.description,
-                                            contentUri = last.contentUri.ifBlank { null },
-                                        ),
-                                        last.origin == "resources",
-                                    )
-                                }
-                            },
-                        )
+                        LibrarySearchBar(query = query, onQueryChange = { query = it })
                     }
-                    itemsIndexed(shelves, key = { _, books -> books.first().number }) { index, books ->
-                        ShelfRow(unit, ShelfTextures[index % ShelfTextures.size], books, undownloaded, onSelectBook)
+                    if (searching) {
+                        if (query.trim().length < 2) {
+                            item(key = "search-hint") { SearchHint("اكتب حرفين على الأقل. المفضّلة (★) تظهر أولًا دائمًا.") }
+                        } else if (results.isEmpty()) {
+                            item(key = "search-empty") { SearchHint("لا نتائج مطابقة.") }
+                        } else {
+                            itemsIndexed(results.chunked(2), key = { _, pair -> pair.first().dest }) { _, pair ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    pair.forEach { hit ->
+                                        Box(Modifier.weight(1f)) {
+                                            SearchHitCard(
+                                                hit = hit,
+                                                onOpen = onSearchOpen,
+                                                onOpenStore = onOpenStore,
+                                            )
+                                        }
+                                    }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    } else {
+                        itemsIndexed(shelves, key = { _, books -> books.first().number }) { index, books ->
+                            ShelfRow(unit, ShelfTextures[index % ShelfTextures.size], books, undownloaded, onSelectBook)
+                        }
                     }
                 }
             }
@@ -177,97 +209,73 @@ fun LibraryScreen(
     if (showSettings) {
         SettingsSheet(onDismiss = { showSettings = false })
     }
-    if (showSearch) {
-        GlobalSearchDialog(
-            onDismiss = { showSearch = false },
-            onOpen = { volume, fromResources ->
-                showSearch = false
-                onSearchOpen(volume, fromResources)
-            },
-            onOpenStore = {
-                showSearch = false
-                onOpenStore()
-            },
-        )
-    }
 }
 
-/** Search + «متابعة القراءة» strip under the library header. */
+/** Direct search field under the library header: type, and the shelves
+ *  below swap themselves for the matching books — no popup, no dialog. */
 @Composable
-private fun LibraryActionsBar(
-    lastReadTitle: String?,
-    lastReadPage: Int?,
-    onSearch: () -> Unit,
-    onContinue: () -> Unit,
-) {
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+private fun LibrarySearchBar(query: String, onQueryChange: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
+            .height(46.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF101E32))
+            .border(1.dp, Color(0xFF30445D), RoundedCornerShape(14.dp))
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.fillMaxWidth().height(46.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF101E32))
-                .border(1.dp, Color(0xFF30445D), RoundedCornerShape(14.dp))
-                .clickable(role = Role.Button, onClick = onSearch)
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Filled.Search,
-                contentDescription = null,
-                tint = Color(0xFF65D4FA),
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "ابحث في الكتب والملخصات والاختبارات...",
-                color = Color(0xFF9DADC0),
-                fontFamily = LibraryFont,
-                fontSize = 13.sp,
+        Icon(
+            Icons.Filled.Search,
+            contentDescription = null,
+            tint = Color(0xFF65D4FA),
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (query.isEmpty()) {
+                Text(
+                    "ابحث في الكتب والملخصات والاختبارات...",
+                    color = Color(0xFF9DADC0),
+                    fontFamily = LibraryFont,
+                    fontSize = 13.sp,
+                )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                cursorBrush = SolidColor(Color(0xFF65D4FA)),
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontFamily = LibraryFont,
+                    fontSize = 14.sp,
+                ),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
-        if (lastReadTitle != null) {
-            Row(
-                Modifier.fillMaxWidth().height(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF123E59))
-                    .border(1.dp, Color(0xFF65D4FA).copy(alpha = 0.7f), RoundedCornerShape(14.dp))
-                    .clickable(role = Role.Button, onClick = onContinue)
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        if (query.isNotEmpty()) {
+            IconButton(onClick = { onQueryChange("") }) {
                 Icon(
-                    Icons.Filled.MenuBook,
-                    contentDescription = null,
-                    tint = Color(0xFF65D4FA),
-                    modifier = Modifier.size(22.dp),
+                    Icons.Filled.Close,
+                    contentDescription = "مسح البحث",
+                    tint = Color(0xFF9DADC0),
+                    modifier = Modifier.size(18.dp),
                 )
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "متابعة القراءة",
-                        color = Color(0xFF65D4FA),
-                        fontFamily = LibraryFont,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.sp,
-                    )
-                    Text(
-                        buildString {
-                            append(lastReadTitle)
-                            if (lastReadPage != null && lastReadPage > 0) {
-                                append(" · صفحة ${lastReadPage + 1}")
-                            }
-                        },
-                        color = Color(0xFFB9C6D8),
-                        fontFamily = LibraryFont,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                    )
-                }
             }
         }
     }
+}
+
+@Composable
+private fun SearchHint(text: String) {
+    Text(
+        text,
+        color = Color(0xFF9DADC0),
+        fontFamily = LibraryFont,
+        fontSize = 13.sp,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
