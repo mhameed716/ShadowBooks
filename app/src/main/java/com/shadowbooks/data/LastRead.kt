@@ -1,6 +1,9 @@
 package com.shadowbooks.data
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.json.JSONObject
 
 /** The last volume opened in the reader, for the "متابعة القراءة" shortcut. */
@@ -56,27 +59,28 @@ object LastReadStore {
         }
     }
 
-    fun save(context: Context, lastRead: LastRead) {
+    fun save(context: Context, record: LastRead) {
         try {
             val json = JSONObject()
-                .put("fileName", lastRead.fileName)
-                .put("title", lastRead.title)
-                .put("description", lastRead.description)
-                .put("contentUri", lastRead.contentUri)
-                .put("origin", lastRead.origin)
-                .put("bookNumber", lastRead.bookNumber)
-                .put("page", lastRead.page)
+                .put("fileName", record.fileName)
+                .put("title", record.title)
+                .put("description", record.description)
+                .put("contentUri", record.contentUri)
+                .put("origin", record.origin)
+                .put("bookNumber", record.bookNumber)
+                .put("page", record.page)
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()
                 .putString(KEY, json.toString())
                 .apply()
+            lastRead = record
         } catch (e: Exception) {
             // The shortcut is a convenience; losing it is harmless.
         }
     }
 
     fun updatePage(context: Context, page: Int) {
-        val current = load(context) ?: return
+        val current = lastRead ?: load(context) ?: return
         if (current.page != page) save(context, current.copy(page = page))
     }
 }
