@@ -28,7 +28,7 @@ import com.shadowbooks.store.StoreContent
 import com.shadowbooks.store.StoreDownloader
 import com.shadowbooks.store.TrashBin
 
-private enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader, Store }
+internal enum class AppDestination { Welcome, Library, Timetable, StudyResources, DevicePdfs, VolumeChooser, Reader, Store }
 
 private fun Book.availableVolumes() = volumes.ifEmpty { listOf(BookVolume(title, fileName)) }
 
@@ -61,42 +61,6 @@ fun ShadowBooksApp(onExit: () -> Unit) {
         // is erased forever at app start, as the settings promise.
         TrashBin.purgeExpired(context)
         Favorites.load(context)
-    }
-
-    // «متابعة القراءة»: every opened volume is remembered with its page.
-    LaunchedEffect(destination, volumeFile, readerContentUri) {
-        if (destination == AppDestination.Reader && volumeFile.isNotBlank()) {
-            val previous = LastReadStore.load(context)
-            val origin = when {
-                readerContentUri.isNotBlank() -> "device"
-                readerFromResources -> "resources"
-                readerFromStore -> "store"
-                else -> "library"
-            }
-            val catalogTitle = BookCatalog.books
-                .firstOrNull { candidate ->
-                    candidate.fileName == volumeFile ||
-                        candidate.volumes.any { it.fileName == volumeFile }
-                }
-                ?.let { candidate ->
-                    candidate.volumes.firstOrNull { it.fileName == volumeFile }?.title
-                        ?: candidate.title
-                }
-            LastReadStore.save(
-                context,
-                LastRead(
-                    fileName = volumeFile,
-                    title = readerTitle.ifBlank {
-                        catalogTitle ?: volumeFile.removeSuffix(".pdf").replace('_', ' ')
-                    },
-                    description = readerDescription,
-                    contentUri = readerContentUri,
-                    origin = origin,
-                    bookNumber = bookNumber,
-                    page = if (previous?.fileName == volumeFile) previous.page else 0,
-                ),
-            )
-        }
     }
 
     // A downloaded file opened from the settings («الملفات المحمّلة») routes
@@ -172,10 +136,29 @@ fun ShadowBooksApp(onExit: () -> Unit) {
             AppDestination.Welcome -> onExit()
         }
     }
+    // Freeze the document metadata in this composition. A disposal callback from
+    // the previous reader must not pick up the next book's mutable route fields.
+    val readingRecord = readerVolume?.let { volume ->
+        LastRead(
+            fileName = volume.fileName,
+            title = volume.title,
+            description = volume.description,
+            contentUri = volume.contentUri.orEmpty(),
+            origin = when {
+                readerFromDevicePdfs -> "device"
+                readerFromResources -> "resources"
+                readerFromStore -> "store"
+                else -> "library"
+            },
+            bookNumber = bookNumber,
+            page = 0,
+        )
+    }
     val continueReading: () -> Unit = {
-        LastReadStore.load(context)?.let { last ->
+        // Defense in depth: no shortcut may bypass the welcome/code gate.
+        LastReadStore.load(context)?.takeIf { screen.canContinueReading() }?.let { last ->
             readerFromResources = last.origin == "resources"
-            readerFromStore = false
+            readerFromStore = last.origin == "store"
             readerFromDevicePdfs = last.origin == "device"
             readerContentUri = last.contentUri
             volumeFile = last.fileName
@@ -330,17 +313,24 @@ fun ShadowBooksApp(onExit: () -> Unit) {
             )
             AppDestination.Reader -> PdfReaderScreen(
                 volume = checkNotNull(readerVolume),
-                initialPage = LastReadStore.peek(context)
-                    ?.takeIf { it.fileName == volumeFile }?.page ?: 0,
-                onPageChanged = { page -> LastReadStore.updatePage(context, page) },
+                initialPage = LastReadStore.pageFor(context, checkNotNull(readerVolume)),
+                onPageChanged = { page ->
+                    LastReadStore.save(context, checkNotNull(readingRecord).copy(page = page))
+                },
                 onBack = back,
             )
         }
-        // The floating «متابعة القراءة» pill rides on every screen except
-        // ملفات الهاتف and the reader itself (where the page already moves it).
-        if (screen != AppDestination.DevicePdfs && screen != AppDestination.Reader) {
+        // Only post-gate destinations may expose the reading shortcut.
+        if (screen.canContinueReading()) {
             ContinueReadingLayer(continueReading)
         }
         }
     }
+}
+
+/** Explicit allowlist: welcome (including its code dialog) can never resume a book. */
+internal fun AppDestination.canContinueReading(): Boolean = when (this) {
+    AppDestination.Library, AppDestination.Timetable, AppDestination.StudyResources,
+    AppDestination.DevicePdfs, AppDestination.VolumeChooser, AppDestination.Store -> true
+    AppDestination.Welcome, AppDestination.Reader -> false
 }
