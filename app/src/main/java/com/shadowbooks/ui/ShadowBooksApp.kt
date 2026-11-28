@@ -99,6 +99,31 @@ fun ShadowBooksApp(onExit: () -> Unit) {
         }
     }
 
+    // A downloaded file opened from the settings («الملفات المحمّلة») routes
+    // straight into the reader, whichever screen the settings were opened on.
+    val pendingSettingsOpen = SettingsOpenRequest.pending
+    LaunchedEffect(pendingSettingsOpen, destination) {
+        val request = pendingSettingsOpen ?: return@LaunchedEffect
+        if (destination == AppDestination.Welcome || destination == AppDestination.Reader) {
+            return@LaunchedEffect
+        }
+        SettingsOpenRequest.pending = null
+        readerFromResources = request.fromResources
+        readerFromStore = false
+        readerFromDevicePdfs = false
+        readerContentUri = ""
+        volumeFile = request.volume.fileName
+        readerTitle = request.volume.title
+        readerDescription = request.volume.description
+        if (!request.fromResources) {
+            BookCatalog.books.firstOrNull { candidate ->
+                candidate.fileName == request.volume.fileName ||
+                    candidate.volumes.any { it.fileName == request.volume.fileName }
+            }?.let { bookNumber = it.number }
+        }
+        destination = AppDestination.Reader
+    }
+
     // A library pack opened from outside goes to the store for import — after
     // the welcome screen, never instead of it.
     val pendingPackUri = PackImportRequest.pendingUri

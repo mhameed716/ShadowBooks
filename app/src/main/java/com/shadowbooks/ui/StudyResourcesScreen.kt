@@ -371,6 +371,51 @@ private fun StudyFileGrid(
     }
 }
 
+/**
+ * A drawn cover for the two built-in ministry guides: the title itself is
+ * the artwork, on a bright ministry-flavoured gradient.
+ */
+@Composable
+private fun GuideCover(title: String, number: Int, modifier: Modifier = Modifier) {
+    val colors = if (number == StudyMaterialCatalog.MINISTRY_MODELS_GUIDE_NUMBER) {
+        listOf(Color(0xFF0E5E78), Color(0xFF123E59), Color(0xFF147B69))
+    } else {
+        listOf(Color(0xFF765521), Color(0xFF8C6430), Color(0xFF5E4A12))
+    }
+    Box(
+        modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(colors))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Filled.Description,
+                contentDescription = null,
+                tint = Color(0xFFFFE9B0),
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.height(5.dp))
+            Text(
+                title,
+                color = Color.White,
+                fontFamily = StudyFont,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 14.sp,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Text(
+                "دليل داخل التطبيق",
+                color = Color(0xFFFFC86B),
+                fontFamily = StudyFont,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun StudyFileCard(file: StudyMaterialFile, onOpen: () -> Unit) {
     val context = LocalContext.current
@@ -388,21 +433,22 @@ private fun StudyFileCard(file: StudyMaterialFile, onOpen: () -> Unit) {
             .padding(7.dp),
     ) {
         Box(
-            Modifier.fillMaxWidth().height(104.dp)
+            Modifier.fillMaxWidth().height(88.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF1B2C47)),
             contentAlignment = Alignment.Center,
         ) {
             val bitmap = cover
-            if (bitmap != null) {
-                Image(
+            when {
+                StudyMaterialCatalog.isGuideBook(file.bookNumber) ->
+                    GuideCover(file.title, file.bookNumber, Modifier.fillMaxSize())
+                bitmap != null -> Image(
                     bitmap.asImageBitmap(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
-            } else {
-                Icon(
+                else -> Icon(
                     Icons.Filled.Description,
                     contentDescription = null,
                     tint = StudyCyan,
@@ -466,15 +512,16 @@ private fun StudySubjectCard(
                 contentAlignment = Alignment.Center,
             ) {
                 val bitmap = cover
-                if (bitmap != null) {
-                    Image(
+                when {
+                    StudyMaterialCatalog.isGuideBook(subjectNumber) ->
+                        GuideCover(title, subjectNumber, Modifier.fillMaxSize())
+                    bitmap != null -> Image(
                         bitmap.asImageBitmap(),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
-                } else {
-                    Icon(
+                    else -> Icon(
                         Icons.Filled.Description,
                         contentDescription = null,
                         tint = Color.White,
